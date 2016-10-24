@@ -128,7 +128,27 @@ microbenchmark(
 
 Okay, let's try to adapt [RcppMLPACK's example code](https://github.com/thirdwing/RcppMLPACK/wiki/Example#k-means-example) for [k-means](http://www.mlpack.org/docs/mlpack-2.0.3/doxygen.php?doc=kmtutorial.html#kmeans_kmtut) to a RcppMLPACK-less context :)
 
-```{Rcpp kmeans_source, eval = FALSE}
+```{r, eval = FALSE}
+Rcpp::sourceCpp(code = "// This is just to see some stuff...
+// [[Rcpp::plugins(cpp11)]]
+// [[Rcpp::depends(RcppArmadillo)]]
+#include <RcppArmadillo.h>
+using namespace Rcpp;
+// [[Rcpp::export]]
+", dryRun = TRUE)
+```
+
+```{r env_vars}
+Sys.setenv(
+  "CXX" = "clang++",
+  "CXX1XSTD" = "-std=c++0x -stdlib=libc++",
+  # "CXX1XSTD" = "-std=c++11 -stdlib=libc++", 
+  "CPPFLAGS" = "$(CPPFLAGS) -I/usr/local/include/",
+  "SHLIB_CXX1XLDFLAGS" = '$(SHLIB_CXX1XLDFLAGS) -L/usr/local/lib'
+)
+```
+
+```{Rcpp kmeans_source}
 // [[Rcpp::plugins(cpp11)]]
 // [[Rcpp::depends(RcppArmadillo)]]
 
@@ -144,22 +164,6 @@ arma::Row<size_t> kMeans(const arma::mat& data, const int& clusters) {
     k.Cluster(data, clusters, assignments); 
     return assignments;
 }
-```
-
-I get the following:
-
-```
-Building shared library for Rcpp code chunk...
-
-Quitting from lines 132-147 (README.Rmd) 
-Error in dyn.load("/Users/mpopov/Desktop/Learning Rcpp/README_cache/markdown_github/kmeans_source_sourceCpp/sourceCpp-x86_64-apple-darwin13.4.0-0.12.7/sourcecpp_450b02624e/sourceCpp_2.so") : 
-  unable to load shared object '/Users/mpopov/Desktop/Learning Rcpp/README_cache/markdown_github/kmeans_source_sourceCpp/sourceCpp-x86_64-apple-darwin13.4.0-0.12.7/sourcecpp_450b02624e/sourceCpp_2.so':
-  dlopen(/Users/mpopov/Desktop/Learning Rcpp/README_cache/markdown_github/kmeans_source_sourceCpp/sourceCpp-x86_64-apple-darwin13.4.0-0.12.7/sourcecpp_450b02624e/sourceCpp_2.so, 6): Symbol not found: __ZN6mlpack3Log4InfoE
-  Referenced from: /Users/mpopov/Desktop/Learning Rcpp/README_cache/markdown_github/kmeans_source_sourceCpp/sourceCpp-x86_64-apple-darwin13.4.0-0.12.7/sourcecpp_450b02624e/sourceCpp_2.so
-  Expected in: flat namespace
- in /Users/mpopov/Desktop/Learning Rcpp/README_cache/markdown_github/kmeans_source_sourceCpp/sourceCpp-x86_64-apple-darwin13.4.0-0.12.7/sourcecpp_450b02624e/sourceCpp_2.so
-Calls: <Anonymous> ... <Anonymous> -> source -> withVisible -> eval -> eval -> dyn.load
-Execution halted
 ```
 
 ```{r kmeans_example, eval = FALSE}

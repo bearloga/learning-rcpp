@@ -101,11 +101,11 @@ microbenchmark(
 ) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
 ```
 
-| expr   |     min|      lq|    mean|  median|      uq|     max|  neval|
-|:-------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| native |  0.0025|  0.0027|  0.0041|  0.0031|  0.0043|  0.0285|    100|
-| loop   |  0.8592|  0.9358|  1.1537|  1.0114|  1.1266|  2.5243|    100|
-| Rcpp   |  0.0043|  0.0049|  0.0097|  0.0066|  0.0119|  0.0922|    100|
+| expr   |     min|      lq|    mean|  median|      uq|      max|  neval|
+|:-------|-------:|-------:|-------:|-------:|-------:|--------:|------:|
+| native |  0.0054|  0.0067|  0.0101|  0.0094|  0.0111|   0.0316|    100|
+| loop   |  2.5596|  2.8170|  3.8305|  2.9332|  4.3961|  10.4269|    100|
+| Rcpp   |  0.0088|  0.0107|  0.0405|  0.0226|  0.0267|   1.4890|    100|
 
 Using Libraries
 ---------------
@@ -139,11 +139,11 @@ microbenchmark(
 ) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
 ```
 
-| expr    |     min|      lq|    mean|  median|      uq|    max|  neval|
-|:--------|-------:|-------:|-------:|-------:|-------:|------:|------:|
-| lm      |  0.8363|  0.8800|  1.0891|  0.9287|  1.2126|  3.148|    100|
-| fastLm  |  0.0909|  0.1088|  0.1464|  0.1213|  0.1480|  1.566|    100|
-| RcppArm |  0.1153|  0.1295|  0.1736|  0.1453|  0.1708|  1.411|    100|
+| expr    |     min|     lq|    mean|  median|      uq|     max|  neval|
+|:--------|-------:|------:|-------:|-------:|-------:|-------:|------:|
+| lm      |  3.0011|  3.233|  4.1407|  3.4576|  4.0617|  16.171|    100|
+| fastLm  |  0.3204|  0.339|  0.4078|  0.3821|  0.4043|   3.136|    100|
+| RcppArm |  0.3982|  0.421|  0.7686|  0.4602|  0.5000|  14.761|    100|
 
 Okay, let's try to adapt [RcppMLPACK's example code](https://github.com/thirdwing/RcppMLPACK/wiki/Example#k-means-example) for [k-means](http://www.mlpack.org/docs/mlpack-2.0.3/doxygen.php?doc=kmtutorial.html#kmeans_kmtut) to a RcppMLPACK-less context :)
 
@@ -164,20 +164,6 @@ arma::Row<size_t> kMeans(const arma::mat& data, const int& clusters) {
     return assignments;
 }
 ```
-
-I get the following:
-
-    Building shared library for Rcpp code chunk...
-
-    Quitting from lines 132-147 (README.Rmd) 
-    Error in dyn.load("/Users/mpopov/Desktop/Learning Rcpp/README_cache/markdown_github/kmeans_source_sourceCpp/sourceCpp-x86_64-apple-darwin13.4.0-0.12.7/sourcecpp_450b02624e/sourceCpp_2.so") : 
-      unable to load shared object '/Users/mpopov/Desktop/Learning Rcpp/README_cache/markdown_github/kmeans_source_sourceCpp/sourceCpp-x86_64-apple-darwin13.4.0-0.12.7/sourcecpp_450b02624e/sourceCpp_2.so':
-      dlopen(/Users/mpopov/Desktop/Learning Rcpp/README_cache/markdown_github/kmeans_source_sourceCpp/sourceCpp-x86_64-apple-darwin13.4.0-0.12.7/sourcecpp_450b02624e/sourceCpp_2.so, 6): Symbol not found: __ZN6mlpack3Log4InfoE
-      Referenced from: /Users/mpopov/Desktop/Learning Rcpp/README_cache/markdown_github/kmeans_source_sourceCpp/sourceCpp-x86_64-apple-darwin13.4.0-0.12.7/sourcecpp_450b02624e/sourceCpp_2.so
-      Expected in: flat namespace
-     in /Users/mpopov/Desktop/Learning Rcpp/README_cache/markdown_github/kmeans_source_sourceCpp/sourceCpp-x86_64-apple-darwin13.4.0-0.12.7/sourcecpp_450b02624e/sourceCpp_2.so
-    Calls: <Anonymous> ... <Anonymous> -> source -> withVisible -> eval -> eval -> dyn.load
-    Execution halted
 
 ``` r
 data(trees, package = "datasets")
