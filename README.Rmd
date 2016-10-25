@@ -174,15 +174,17 @@ NumericVector fastKm(const arma::mat& data, const size_t& clusters) {
 }
 ```
 
-(Alternatively: `sourceCpp("`[src/fastKm.cpp](src/fastKm.cpp)`")`)
+(Alternatively: `sourceCpp("src/fastKm.cpp")` which creates `fastKm()` from [src/fastKm.cpp](src/fastKm.cpp))
 
 ```{r kmeans_example, dependson = 'kmeans_source', cache = TRUE}
 data(trees, package = "datasets"); data(faithful, package = "datasets")
+# KMeans in MLPACK requires observations to be in columns, not rows:
+ttrees <- t(trees); tfaithful <- t(faithful)
 microbenchmark(
   kmeans_trees = kmeans(trees, 3),
-  fastKm_trees = fastKm(t(trees), 3),
+  fastKm_trees = fastKm(ttrees, 3),
   kmeans_faithful = kmeans(faithful, 2),
-  fastKm_faithful = fastKm(t(faithful), 2)
+  fastKm_faithful = fastKm(tfaithful, 2)
 ) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
 ```
 

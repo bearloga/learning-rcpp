@@ -103,9 +103,9 @@ microbenchmark(
 
 | expr   |     min|      lq|    mean|  median|      uq|     max|  neval|
 |:-------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| native |  0.0025|  0.0030|  0.0051|  0.0041|  0.0055|  0.0271|    100|
-| loop   |  0.8690|  1.0000|  1.3774|  1.2232|  1.6609|  2.9292|    100|
-| Rcpp   |  0.0043|  0.0069|  0.0149|  0.0118|  0.0174|  0.0944|    100|
+| native |  0.0025|  0.0032|  0.0063|  0.0047|  0.0067|  0.0471|    100|
+| loop   |  0.8616|  1.0750|  1.5082|  1.3456|  1.8481|  3.5579|    100|
+| Rcpp   |  0.0044|  0.0065|  0.0158|  0.0135|  0.0171|  0.1510|    100|
 
 Using Libraries
 ---------------
@@ -143,9 +143,9 @@ microbenchmark(
 
 | expr    |     min|      lq|    mean|  median|      uq|     max|  neval|
 |:--------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| lm      |  0.8361|  1.0069|  1.6627|  1.3751|  1.9665|  7.4787|    100|
-| fastLm  |  0.0939|  0.1145|  0.1815|  0.1378|  0.2163|  0.7773|    100|
-| RcppArm |  0.1199|  0.1441|  0.2150|  0.1838|  0.2396|  1.0945|    100|
+| lm      |  0.8772|  1.0120|  1.4199|  1.3152|  1.6699|  4.2407|    100|
+| fastLm  |  0.0936|  0.1161|  0.1851|  0.1386|  0.1975|  2.1514|    100|
+| RcppArm |  0.1151|  0.1441|  0.2057|  0.1636|  0.2225|  0.7814|    100|
 
 ### Fast K-Means
 
@@ -193,24 +193,26 @@ NumericVector fastKm(const arma::mat& data, const size_t& clusters) {
 }
 ```
 
-(Alternatively: `sourceCpp("`[src/fastKm.cpp](src/fastKm.cpp)`")`)
+(Alternatively: `sourceCpp("src/fastKm.cpp")` which creates `fastKm()` from [src/fastKm.cpp](src/fastKm.cpp))
 
 ``` r
 data(trees, package = "datasets"); data(faithful, package = "datasets")
+# KMeans in MLPACK requires observations to be in columns, not rows:
+ttrees <- t(trees); tfaithful <- t(faithful)
 microbenchmark(
   kmeans_trees = kmeans(trees, 3),
-  fastKm_trees = fastKm(t(trees), 3),
+  fastKm_trees = fastKm(ttrees, 3),
   kmeans_faithful = kmeans(faithful, 2),
-  fastKm_faithful = fastKm(t(faithful), 2)
+  fastKm_faithful = fastKm(tfaithful, 2)
 ) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
 ```
 
 | expr             |     min|      lq|    mean|  median|      uq|     max|  neval|
 |:-----------------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| kmeans\_trees    |  0.2301|  0.2515|  0.3552|  0.2841|  0.3655|  1.1422|    100|
-| fastKm\_trees    |  0.0646|  0.0827|  0.1223|  0.0972|  0.1156|  0.8988|    100|
-| kmeans\_faithful |  0.2766|  0.2949|  0.4182|  0.3270|  0.4627|  1.8186|    100|
-| fastKm\_faithful |  0.1605|  0.2145|  0.2557|  0.2298|  0.2808|  0.4853|    100|
+| kmeans\_trees    |  0.2291|  0.2598|  0.3926|  0.3180|  0.4763|  1.5878|    100|
+| fastKm\_trees    |  0.0179|  0.0348|  0.0525|  0.0443|  0.0593|  0.2291|    100|
+| kmeans\_faithful |  0.2804|  0.3079|  0.4977|  0.3701|  0.5093|  4.1587|    100|
+| fastKm\_faithful |  0.0751|  0.1208|  0.1570|  0.1366|  0.2033|  0.3079|    100|
 
 Modules
 -------
