@@ -101,16 +101,18 @@ microbenchmark(
 ) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
 ```
 
-| expr   |     min|      lq|    mean|  median|      uq|      max|  neval|
-|:-------|-------:|-------:|-------:|-------:|-------:|--------:|------:|
-| native |  0.0054|  0.0067|  0.0101|  0.0094|  0.0111|   0.0316|    100|
-| loop   |  2.5596|  2.8170|  3.8305|  2.9332|  4.3961|  10.4269|    100|
-| Rcpp   |  0.0088|  0.0107|  0.0405|  0.0226|  0.0267|   1.4890|    100|
+| expr   |     min|      lq|    mean|  median|      uq|     max|  neval|
+|:-------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
+| native |  0.0025|  0.0031|  0.0052|  0.0045|  0.0061|  0.0202|    100|
+| loop   |  0.8835|  1.0925|  1.4134|  1.2645|  1.7018|  2.7296|    100|
+| Rcpp   |  0.0042|  0.0063|  0.0145|  0.0123|  0.0160|  0.0899|    100|
 
 Using Libraries
 ---------------
 
-This is the example code taken from Dirk's talk on RcppArmadillo and I'm using it to test how much I can do within Rcpp chunks in RMarkdown.
+### Armadillo vs RcppArmadillo
+
+Use the **depends** attribute to bring in [RcppArmadillo](https://cran.r-project.org/package=RcppArmadillo), which is an Rcpp integration of the templated linear algebra library [Armadillo](http://arma.sourceforge.net/). The code below is an example of a fast linear model from Dirk Eddelbuettel.
 
 ``` cpp
 // [[Rcpp::depends(RcppArmadillo)]]
@@ -139,39 +141,96 @@ microbenchmark(
 ) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
 ```
 
-| expr    |     min|     lq|    mean|  median|      uq|     max|  neval|
-|:--------|-------:|------:|-------:|-------:|-------:|-------:|------:|
-| lm      |  3.0011|  3.233|  4.1407|  3.4576|  4.0617|  16.171|    100|
-| fastLm  |  0.3204|  0.339|  0.4078|  0.3821|  0.4043|   3.136|    100|
-| RcppArm |  0.3982|  0.421|  0.7686|  0.4602|  0.5000|  14.761|    100|
+| expr    |     min|      lq|    mean|  median|      uq|     max|  neval|
+|:--------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
+| lm      |  0.8615|  1.0684|  1.5596|  1.3709|  1.6991|  5.0454|    100|
+| fastLm  |  0.0989|  0.1166|  0.2117|  0.1426|  0.1947|  2.8601|    100|
+| RcppArm |  0.1215|  0.1408|  0.2046|  0.1666|  0.2131|  0.6957|    100|
 
-Okay, let's try to adapt [RcppMLPACK's example code](https://github.com/thirdwing/RcppMLPACK/wiki/Example#k-means-example) for [k-means](http://www.mlpack.org/docs/mlpack-2.0.3/doxygen.php?doc=kmtutorial.html#kmeans_kmtut) to a RcppMLPACK-less context :)
+### Fast K-Means
+
+Unfortunately, [RcppMLPACK](https://cran.r-project.org/package=RcppMLPACK) uses version 1 of [MLPACK](http://www.mlpack.org/) (now in version 2) and only makes the unsupervised learning methods accessible. (Supervised methods would require returning a trained classifier object to R, which is actually a really difficult problem.)
+
+Okay, let's try to get a fast version of <span title="Bradley, P. S., &amp; Fayyad, U. M. (1998). Refining Initial Points for K-Means Clustering. Icml." style="font-weight: bold;">k-means</span>.
+
+First, install the MLPACK library (see [§ Software Libraries](#software-libraries)), then:
+
+``` r
+# Thanks to Kevin Ushey for suggesting Rcpp plugins (e.g. Rcpp:::.plugins$openmp)
+registerPlugin("mlpack11", function() {
+  return(list(env = list(
+    USE_CXX1X = "yes",
+    CXX1XSTD="-std=c++11",
+    PKG_LIBS = "-lmlpack"
+  )))
+})
+```
+
+The documentation for [KMeans](http://www.mlpack.org/docs/mlpack-1.0.6/doxygen.php?doc=kmtutorial.html#kmeans_kmtut) shows:
 
 ``` cpp
-// [[Rcpp::plugins(cpp11)]]
+#include <mlpack/methods/kmeans/kmeans.hpp>
+
+using namespace mlpack::kmeans;
+
+// The dataset we are clustering.
+extern arma::mat data;
+// The number of clusters we are getting.
+extern size_t clusters;
+
+// The assignments will be stored in this vector.
+arma::Col<size_t> assignments;
+
+// Initialize with the default arguments.
+KMeans<> k;
+k.Cluster(data, clusters, assignments);
+```
+
+...which we can then integrate in Rcpp as:
+
+``` cpp
+// [[Rcpp::plugins(mlpack11)]]
 // [[Rcpp::depends(RcppArmadillo)]]
 
 #include <RcppArmadillo.h>
 using namespace Rcpp;
+#include <mlpack/core/util/log.hpp>
 #include <mlpack/methods/kmeans/kmeans.hpp>
 using namespace mlpack::kmeans;
+using namespace arma;
 
 // [[Rcpp::export]]
-arma::Row<size_t> kMeans(const arma::mat& data, const int& clusters) {
-    arma::Row<size_t> assignments;
-    KMeans<> k;
-    k.Cluster(data, clusters, assignments); 
-    return assignments;
+NumericVector fastKm(const arma::mat& data, const size_t& clusters) {
+  Row<size_t> assignments;
+  KMeans<> k;
+  k.Cluster(data, clusters, assignments);
+  // Let's change the format of the output to be a little nicer:
+  NumericVector clust(data.n_cols);
+  for (int i = 0; i < assignments.n_cols; i++) {
+    clust[i] = assignments(i) + 1; // cluster assignments are 0-based
+  }
+  return clust;
 }
 ```
 
+(Alternatively: `sourceCpp("`[src/fastKM.cpp](src/fastKM.cpp)`")`)
+
 ``` r
-data(trees, package = "datasets")
+data(trees, package = "datasets"); data(faithful, package = "datasets")
 microbenchmark(
-  kmeans = kmeans(trees, 3),
-  kMeans = kMeans(t(trees), 3)
+  kmeans_trees = kmeans(trees, 3),
+  fastKm_trees = fastKm(t(trees), 3),
+  kmeans_faithful = kmeans(faithful, 2),
+  fastKm_faithful = fastKm(t(faithful), 2)
 ) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
 ```
+
+| expr             |     min|      lq|    mean|  median|      uq|     max|  neval|
+|:-----------------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
+| kmeans\_trees    |  0.2260|  0.2483|  0.3597|  0.2962|  0.4286|  1.0659|    100|
+| fastKm\_trees    |  0.0643|  0.0832|  0.1540|  0.0967|  0.1304|  4.0053|    100|
+| kmeans\_faithful |  0.2751|  0.2930|  0.4336|  0.3263|  0.4522|  2.8302|    100|
+| fastKm\_faithful |  0.1889|  0.2167|  0.2685|  0.2311|  0.3114|  0.6548|    100|
 
 Modules
 -------
@@ -182,3 +241,4 @@ References
 ==========
 
 -   Eddelbuettel, D. (2013). Seamless R and C++ Integration with Rcpp. New York, NY: Springer Science & Business Media. <http://doi.org/10.1007/978-1-4614-6868-4>
+-   Wickham, H. A. (2014). Advanced R. Chapman and Hall/CRC. <http://doi.org/10.1201/b17487>

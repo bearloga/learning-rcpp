@@ -97,7 +97,9 @@ microbenchmark(
 
 ## Using Libraries
 
-This is the example code taken from Dirk's talk on RcppArmadillo and I'm using it to test how much I can do within Rcpp chunks in RMarkdown.
+### Armadillo vs RcppArmadillo
+
+Use the **depends** attribute to bring in [RcppArmadillo](https://cran.r-project.org/package=RcppArmadillo), which is an Rcpp integration of the templated linear algebra library [Armadillo](http://arma.sourceforge.net/). The code below is an example of a fast linear model from Dirk Eddelbuettel.
 
 ```{Rcpp fastlm_source, cache = TRUE}
 // [[Rcpp::depends(RcppArmadillo)]]
@@ -126,51 +128,81 @@ microbenchmark(
 ) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
 ```
 
-Okay, let's try to adapt [RcppMLPACK's example code](https://github.com/thirdwing/RcppMLPACK/wiki/Example#k-means-example) for [k-means](http://www.mlpack.org/docs/mlpack-2.0.3/doxygen.php?doc=kmtutorial.html#kmeans_kmtut) to a RcppMLPACK-less context :)
+### Fast K-Means
 
-```{r, eval = FALSE}
-Rcpp::sourceCpp(code = "// This is just to see some stuff...
-// [[Rcpp::plugins(cpp11)]]
-// [[Rcpp::depends(RcppArmadillo)]]
-#include <RcppArmadillo.h>
-using namespace Rcpp;
-// [[Rcpp::export]]
-", dryRun = TRUE)
+Unfortunately, [RcppMLPACK](https://cran.r-project.org/package=RcppMLPACK) uses version 1 of [MLPACK](http://www.mlpack.org/) (now in version 2) and only makes the unsupervised learning methods accessible. (Supervised methods would require returning a trained classifier object to R, which is actually a really difficult problem.)
+
+Okay, let's try to get a fast version of <span title = "Bradley, P. S., & Fayyad, U. M. (1998). Refining Initial Points for K-Means Clustering. Icml." style = "font-weight: bold;">k-means</span>.
+
+First, install the MLPACK library (see [&sect; Software Libraries](#software-libraries)), then:
+
+```{r kmeans_prereq, cache = TRUE}
+# Thanks to Kevin Ushey for suggesting Rcpp plugins (e.g. Rcpp:::.plugins$openmp)
+registerPlugin("mlpack11", function() {
+  return(list(env = list(
+    USE_CXX1X = "yes",
+    CXX1XSTD="-std=c++11",
+    PKG_LIBS = "-lmlpack"
+  )))
+})
 ```
 
-```{r env_vars}
-Sys.setenv(
-  "CXX" = "clang++",
-  "CXX1XSTD" = "-std=c++0x -stdlib=libc++",
-  # "CXX1XSTD" = "-std=c++11 -stdlib=libc++", 
-  "CPPFLAGS" = "$(CPPFLAGS) -I/usr/local/include/",
-  "SHLIB_CXX1XLDFLAGS" = '$(SHLIB_CXX1XLDFLAGS) -L/usr/local/lib'
-)
-```
+The documentation for [KMeans](http://www.mlpack.org/docs/mlpack-1.0.6/doxygen.php?doc=kmtutorial.html#kmeans_kmtut) shows:
 
-```{Rcpp kmeans_source}
-// [[Rcpp::plugins(cpp11)]]
-// [[Rcpp::depends(RcppArmadillo)]]
-
-#include <RcppArmadillo.h>
-using namespace Rcpp;
+```cpp
 #include <mlpack/methods/kmeans/kmeans.hpp>
+
 using namespace mlpack::kmeans;
 
+// The dataset we are clustering.
+extern arma::mat data;
+// The number of clusters we are getting.
+extern size_t clusters;
+
+// The assignments will be stored in this vector.
+arma::Col<size_t> assignments;
+
+// Initialize with the default arguments.
+KMeans<> k;
+k.Cluster(data, clusters, assignments);
+```
+
+...which we can then integrate in Rcpp as:
+
+```{Rcpp kmeans_source, cache = TRUE, dependson = 'kmeans_prereq'}
+// [[Rcpp::plugins(mlpack11)]]
+// [[Rcpp::depends(RcppArmadillo)]]
+
+#include <RcppArmadillo.h>
+using namespace Rcpp;
+#include <mlpack/core/util/log.hpp>
+#include <mlpack/methods/kmeans/kmeans.hpp>
+using namespace mlpack::kmeans;
+using namespace arma;
+
 // [[Rcpp::export]]
-arma::Row<size_t> kMeans(const arma::mat& data, const int& clusters) {
-    arma::Row<size_t> assignments;
-    KMeans<> k;
-    k.Cluster(data, clusters, assignments); 
-    return assignments;
+NumericVector fastKm(const arma::mat& data, const size_t& clusters) {
+  Row<size_t> assignments;
+  KMeans<> k;
+  k.Cluster(data, clusters, assignments);
+  // Let's change the format of the output to be a little nicer:
+  NumericVector clust(data.n_cols);
+  for (int i = 0; i < assignments.n_cols; i++) {
+    clust[i] = assignments(i) + 1; // cluster assignments are 0-based
+  }
+  return clust;
 }
 ```
 
-```{r kmeans_example, eval = FALSE}
-data(trees, package = "datasets")
+(Alternatively: `sourceCpp("`[src/fastKM.cpp](src/fastKM.cpp)`")`)
+
+```{r kmeans_example, dependson = 'kmeans_source', cache = TRUE}
+data(trees, package = "datasets"); data(faithful, package = "datasets")
 microbenchmark(
-  kmeans = kmeans(trees, 3),
-  kMeans = kMeans(t(trees), 3)
+  kmeans_trees = kmeans(trees, 3),
+  fastKm_trees = fastKm(t(trees), 3),
+  kmeans_faithful = kmeans(faithful, 2),
+  fastKm_faithful = fastKm(t(faithful), 2)
 ) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
 ```
 
@@ -181,3 +213,4 @@ microbenchmark(
 # References
 
 - Eddelbuettel, D. (2013). Seamless R and C++ Integration with Rcpp. New York, NY: Springer Science & Business Media. http://doi.org/10.1007/978-1-4614-6868-4
+- Wickham, H. A. (2014). Advanced R. Chapman and Hall/CRC. http://doi.org/10.1201/b17487
