@@ -174,7 +174,7 @@ NumericVector fastKm(const arma::mat& data, const size_t& clusters) {
 }
 ```
 
-(Alternatively: `sourceCpp("`[src/fastKM.cpp](src/fastKM.cpp)`")`)
+(Alternatively: `sourceCpp("`[src/fastKm.cpp](src/fastKm.cpp)`")`)
 
 ```{r kmeans_example, dependson = 'kmeans_source', cache = TRUE}
 data(trees, package = "datasets"); data(faithful, package = "datasets")
