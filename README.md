@@ -103,9 +103,9 @@ microbenchmark(
 
 | expr   |     min|      lq|    mean|  median|      uq|     max|  neval|
 |:-------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| native |  0.0025|  0.0031|  0.0052|  0.0045|  0.0061|  0.0202|    100|
-| loop   |  0.8835|  1.0925|  1.4134|  1.2645|  1.7018|  2.7296|    100|
-| Rcpp   |  0.0042|  0.0063|  0.0145|  0.0123|  0.0160|  0.0899|    100|
+| native |  0.0025|  0.0032|  0.0061|  0.0049|  0.0074|  0.0233|    100|
+| loop   |  0.8781|  1.0505|  1.5715|  1.3498|  1.9383|  4.8349|    100|
+| Rcpp   |  0.0042|  0.0055|  0.0139|  0.0115|  0.0180|  0.0633|    100|
 
 Using Libraries
 ---------------
@@ -141,11 +141,11 @@ microbenchmark(
 ) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
 ```
 
-| expr    |     min|      lq|    mean|  median|      uq|     max|  neval|
-|:--------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| lm      |  0.8615|  1.0684|  1.5596|  1.3709|  1.6991|  5.0454|    100|
-| fastLm  |  0.0989|  0.1166|  0.2117|  0.1426|  0.1947|  2.8601|    100|
-| RcppArm |  0.1215|  0.1408|  0.2046|  0.1666|  0.2131|  0.6957|    100|
+| expr    |     min|      lq|    mean|  median|     uq|     max|  neval|
+|:--------|-------:|-------:|-------:|-------:|------:|-------:|------:|
+| lm      |  0.8931|  1.1371|  1.8570|  1.6065|  2.199|  5.0911|    100|
+| fastLm  |  0.0980|  0.1187|  0.1960|  0.1608|  0.233|  0.7835|    100|
+| RcppArm |  0.1205|  0.1469|  0.2682|  0.1916|  0.277|  3.5515|    100|
 
 ### Fast K-Means
 
@@ -166,27 +166,7 @@ registerPlugin("mlpack11", function() {
 })
 ```
 
-The documentation for [KMeans](http://www.mlpack.org/docs/mlpack-1.0.6/doxygen.php?doc=kmtutorial.html#kmeans_kmtut) shows:
-
-``` cpp
-#include <mlpack/methods/kmeans/kmeans.hpp>
-
-using namespace mlpack::kmeans;
-
-// The dataset we are clustering.
-extern arma::mat data;
-// The number of clusters we are getting.
-extern size_t clusters;
-
-// The assignments will be stored in this vector.
-arma::Col<size_t> assignments;
-
-// Initialize with the default arguments.
-KMeans<> k;
-k.Cluster(data, clusters, assignments);
-```
-
-...which we can then integrate in Rcpp as:
+We refer to the documentation for [KMeans](http://www.mlpack.org/docs/mlpack-1.0.6/doxygen.php?doc=kmtutorial.html#kmeans_kmtut) shows, although it seems to incorrectly use `arma::Col<size_t>` for cluster assigments while in practice the cluster assignments are returned as an `arma::Row<size_t>` object.
 
 ``` cpp
 // [[Rcpp::plugins(mlpack11)]]
@@ -227,10 +207,10 @@ microbenchmark(
 
 | expr             |     min|      lq|    mean|  median|      uq|     max|  neval|
 |:-----------------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| kmeans\_trees    |  0.2260|  0.2483|  0.3597|  0.2962|  0.4286|  1.0659|    100|
-| fastKm\_trees    |  0.0643|  0.0832|  0.1540|  0.0967|  0.1304|  4.0053|    100|
-| kmeans\_faithful |  0.2751|  0.2930|  0.4336|  0.3263|  0.4522|  2.8302|    100|
-| fastKm\_faithful |  0.1889|  0.2167|  0.2685|  0.2311|  0.3114|  0.6548|    100|
+| kmeans\_trees    |  0.2303|  0.2479|  0.3332|  0.2815|  0.3564|  0.8560|    100|
+| fastKm\_trees    |  0.0648|  0.0832|  0.1088|  0.0929|  0.1150|  0.4007|    100|
+| kmeans\_faithful |  0.2775|  0.2986|  0.5114|  0.3950|  0.6343|  2.0095|    100|
+| fastKm\_faithful |  0.1585|  0.2211|  0.3007|  0.2365|  0.3259|  0.8198|    100|
 
 Modules
 -------

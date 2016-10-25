@@ -147,27 +147,7 @@ registerPlugin("mlpack11", function() {
 })
 ```
 
-The documentation for [KMeans](http://www.mlpack.org/docs/mlpack-1.0.6/doxygen.php?doc=kmtutorial.html#kmeans_kmtut) shows:
-
-```cpp
-#include <mlpack/methods/kmeans/kmeans.hpp>
-
-using namespace mlpack::kmeans;
-
-// The dataset we are clustering.
-extern arma::mat data;
-// The number of clusters we are getting.
-extern size_t clusters;
-
-// The assignments will be stored in this vector.
-arma::Col<size_t> assignments;
-
-// Initialize with the default arguments.
-KMeans<> k;
-k.Cluster(data, clusters, assignments);
-```
-
-...which we can then integrate in Rcpp as:
+We refer to the documentation for [KMeans](http://www.mlpack.org/docs/mlpack-1.0.6/doxygen.php?doc=kmtutorial.html#kmeans_kmtut) shows, although it seems to incorrectly use `arma::Col<size_t>` for cluster assigments while in practice the cluster assignments are returned as an `arma::Row<size_t>` object.
 
 ```{Rcpp kmeans_source, cache = TRUE, dependson = 'kmeans_prereq'}
 // [[Rcpp::plugins(mlpack11)]]
