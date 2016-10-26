@@ -1,14 +1,21 @@
-My main goal in this educational endeavor is to be able to use the [MLPACK](http://www.mlpack.org/) library in R, with the hope of being able to include its Naive Bayes classifier in [MLPUGS](https://cran.r-project.org/package=MLPUGS). Now, there is a [RcppMLPACK](https://cran.r-project.org/package=RcppMLPACK), but that one apparently uses version 1 of MLPACK (which is now in version 2) and doesn't include any supervised learning methods, just unsupervised learning methods.
+My main goal in this educational endeavor is to be able to use the [MLPACK](http://www.mlpack.org/), [Shark](http://image.diku.dk/shark/), and [dlib](http://dlib.net/) C++ machine learning libraries in R for computationally intensive problems. Now, there is a [RcppMLPACK](https://cran.r-project.org/package=RcppMLPACK), but that one apparently uses version 1 of MLPACK (which is now in version 2) and doesn't include any supervised learning methods, just unsupervised learning methods.
 
 -   [Setup](#setup)
     -   [Software Libraries](#software-libraries)
     -   [Mac OS X](#mac-os-x)
     -   [Ubuntu/Debian](#ubuntudebian)
+        -   [Building Shark library](#building-shark-library)
     -   [R Packages](#r-packages)
 -   [Rcpp](#rcpp)
     -   [Basics](#basics)
     -   [Using Libraries](#using-libraries)
-    -   [Modules](#modules)
+        -   [Armadillo vs RcppArmadillo](#armadillo-vs-rcpparmadillo)
+        -   [Fast K-Means](#fast-k-means)
+    -   [Object Serialization](#object-serialization)
+        -   [Simple Example](#simple-example)
+        -   [Fast Classification](#fast-classification)
+            -   [Training](#training)
+            -   [Prediction](#prediction)
 -   [References](#references)
 
 Setup
@@ -28,14 +35,36 @@ brew tap homebrew/versions && brew tap homebrew/science && brew update
 # brew install gcc --enable-cxx && brew link --overwrite gcc && brew link cmake
 brew install boost --c++11
 # Installing cmake may require: sudo chown -R `whoami` /usr/local/share/man/man7
-brew install mlpack
+brew install mlpack shark dlib
 ```
 
 Ubuntu/Debian
 -------------
 
 ``` bash
-sudo apt-get install libmlpack
+sudo apt-get install libmlpack-dev libdlib-dev
+```
+
+### Building Shark library
+
+If `sudo apt-get install libshark-dev` is no go, we have to build the library ourselves. See [these installation instructions](http://image.diku.dk/shark/sphinx_pages/build/html/rest_sources/getting_started/installation.html) for more details.
+
+``` bash
+# Install dependencies
+sudo apt-get install cmake cmake-curses-gui libatlas-base-dev wget
+
+# Download and unpack
+wget -O Shark-3.0.0.tar.gz https://github.com/Shark-ML/Shark/archive/v3.0.0.tar.gz
+tar -zxvf Shark-3.0.0.tar.gz
+mv Shark-3.0.0 Shark
+
+# Configure and build
+mkdir Shark/build/
+cd Shark/build
+# cmake "-DENABLE_OPENMP=OFF" "-DCMAKE_INSTALL_PREFIX=/usr/local/" ../
+cmake ../
+make
+make install
 ```
 
 R Packages
@@ -103,9 +132,9 @@ microbenchmark(
 
 | expr   |     min|      lq|    mean|  median|      uq|     max|  neval|
 |:-------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| native |  0.0025|  0.0032|  0.0063|  0.0047|  0.0067|  0.0471|    100|
-| loop   |  0.8616|  1.0750|  1.5082|  1.3456|  1.8481|  3.5579|    100|
-| Rcpp   |  0.0044|  0.0065|  0.0158|  0.0135|  0.0171|  0.1510|    100|
+| native |  0.0025|  0.0033|  0.0060|  0.0045|  0.0072|  0.0446|    100|
+| loop   |  0.8803|  1.0589|  1.4099|  1.2361|  1.6170|  3.8196|    100|
+| Rcpp   |  0.0043|  0.0064|  0.0125|  0.0118|  0.0159|  0.0329|    100|
 
 Using Libraries
 ---------------
@@ -143,9 +172,9 @@ microbenchmark(
 
 | expr    |     min|      lq|    mean|  median|      uq|     max|  neval|
 |:--------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| lm      |  0.8772|  1.0120|  1.4199|  1.3152|  1.6699|  4.2407|    100|
-| fastLm  |  0.0936|  0.1161|  0.1851|  0.1386|  0.1975|  2.1514|    100|
-| RcppArm |  0.1151|  0.1441|  0.2057|  0.1636|  0.2225|  0.7814|    100|
+| lm      |  0.8885|  1.0258|  1.4476|  1.3170|  1.7037|  3.9269|    100|
+| fastLm  |  0.0968|  0.1144|  0.1627|  0.1405|  0.1767|  0.7230|    100|
+| RcppArm |  0.1205|  0.1500|  0.2136|  0.1794|  0.2509|  0.7807|    100|
 
 ### Fast K-Means
 
@@ -209,15 +238,23 @@ microbenchmark(
 
 | expr             |     min|      lq|    mean|  median|      uq|     max|  neval|
 |:-----------------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| kmeans\_trees    |  0.2291|  0.2598|  0.3926|  0.3180|  0.4763|  1.5878|    100|
-| fastKm\_trees    |  0.0179|  0.0348|  0.0525|  0.0443|  0.0593|  0.2291|    100|
-| kmeans\_faithful |  0.2804|  0.3079|  0.4977|  0.3701|  0.5093|  4.1587|    100|
-| fastKm\_faithful |  0.0751|  0.1208|  0.1570|  0.1366|  0.2033|  0.3079|    100|
+| kmeans\_trees    |  0.2255|  0.2459|  0.3058|  0.2682|  0.3221|  0.6369|    100|
+| fastKm\_trees    |  0.0175|  0.0321|  0.0469|  0.0411|  0.0582|  0.1308|    100|
+| kmeans\_faithful |  0.2753|  0.2933|  0.3926|  0.3220|  0.4231|  1.8311|    100|
+| fastKm\_faithful |  0.0751|  0.1183|  0.1435|  0.1269|  0.1499|  0.3685|    100|
 
-Modules
--------
+Object Serialization
+--------------------
 
-### Simple
+Serialization and deserialization require C++11 (`// [[Rcpp::plugins(cpp11)]]`), [cereal](https://github.com/USCiLab/cereal) via [Rcereal](https://cran.rstudio.com/package=Rcereal) (`// [[Rcpp::depends(Rcereal)]]`), and [boost](http://www.boost.org/) via [BH](https://cran.rstudio.com/package=BH) (`// [[Rcpp::depends(BH)]]`). See [Serialization of trie objects](https://github.com/Ironholds/triebeard/issues/9) discussion from Oliver et al.'s [triebeard](https://cran.rstudio.com/package=triebeard) package and [Serialize and Deserialize a C++ Object in Rcpp](http://gallery.rcpp.org/articles/rcpp-serialization/) article.
+
+### Simple Example
+
+### Fast Classification
+
+#### Training
+
+#### Prediction
 
 References
 ==========

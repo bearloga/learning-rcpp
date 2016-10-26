@@ -5,7 +5,7 @@ output:
     includes:
       in_header: header.md
     toc: true
-    toc_depth: 2
+    toc_depth: 4
 ---
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -26,13 +26,35 @@ brew tap homebrew/versions && brew tap homebrew/science && brew update
 # brew install gcc --enable-cxx && brew link --overwrite gcc && brew link cmake
 brew install boost --c++11
 # Installing cmake may require: sudo chown -R `whoami` /usr/local/share/man/man7
-brew install mlpack
+brew install mlpack shark dlib
 ```
 
 ## Ubuntu/Debian
 
 ```bash
-sudo apt-get install libmlpack
+sudo apt-get install libmlpack-dev libdlib-dev
+```
+
+### Building Shark library
+
+If `sudo apt-get install libshark-dev` is no go, we have to build the library ourselves. See [these installation instructions](http://image.diku.dk/shark/sphinx_pages/build/html/rest_sources/getting_started/installation.html) for more details.
+
+```bash
+# Install dependencies
+sudo apt-get install cmake cmake-curses-gui libatlas-base-dev wget
+
+# Download and unpack
+wget -O Shark-3.0.0.tar.gz https://github.com/Shark-ML/Shark/archive/v3.0.0.tar.gz
+tar -zxvf Shark-3.0.0.tar.gz
+mv Shark-3.0.0 Shark
+
+# Configure and build
+mkdir Shark/build/
+cd Shark/build
+# cmake "-DENABLE_OPENMP=OFF" "-DCMAKE_INSTALL_PREFIX=/usr/local/" ../
+cmake ../
+make
+make install
 ```
 
 ## R Packages
@@ -188,9 +210,17 @@ microbenchmark(
 ) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
 ```
 
-## Modules
+## Object Serialization
 
-### Simple
+Serialization and deserialization require C++11 (`// [[Rcpp::plugins(cpp11)]]`), [cereal](https://github.com/USCiLab/cereal) via [Rcereal](https://cran.rstudio.com/package=Rcereal) (`// [[Rcpp::depends(Rcereal)]]`), and [boost](http://www.boost.org/) via [BH](https://cran.rstudio.com/package=BH) (`// [[Rcpp::depends(BH)]]`). See [Serialization of trie objects](https://github.com/Ironholds/triebeard/issues/9) discussion from Oliver et al.'s [triebeard](https://cran.rstudio.com/package=triebeard) package and [Serialize and Deserialize a C++ Object in Rcpp](http://gallery.rcpp.org/articles/rcpp-serialization/) article.
+
+### Simple Example
+
+### Fast Classification
+
+#### Training
+
+#### Prediction
 
 # References
 
