@@ -137,9 +137,9 @@ microbenchmark(
 
 | expr   |     min|      lq|    mean|  median|      uq|     max|  neval|
 |:-------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| native |  0.0025|  0.0028|  0.0050|  0.0040|  0.0058|  0.0136|    100|
-| loop   |  0.8780|  1.0469|  1.3214|  1.1346|  1.5519|  3.4080|    100|
-| Rcpp   |  0.0043|  0.0054|  0.0116|  0.0088|  0.0140|  0.0544|    100|
+| native |  0.0025|  0.0029|  0.0052|  0.0043|  0.0064|  0.0172|    100|
+| loop   |  0.9133|  1.0851|  1.3737|  1.2399|  1.6022|  2.7706|    100|
+| Rcpp   |  0.0044|  0.0057|  0.0131|  0.0112|  0.0172|  0.0516|    100|
 
 Using Libraries
 ---------------
@@ -177,9 +177,9 @@ microbenchmark(
 
 | expr    |     min|      lq|    mean|  median|      uq|     max|  neval|
 |:--------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| lm      |  0.8590|  1.0120|  1.4075|  1.2079|  1.6621|  3.7233|    100|
-| fastLm  |  0.0910|  0.1128|  0.1484|  0.1319|  0.1710|  0.4755|    100|
-| RcppArm |  0.1202|  0.1411|  0.2141|  0.1812|  0.2383|  0.9629|    100|
+| lm      |  0.8646|  0.9417|  1.2413|  1.0756|  1.3839|  3.0538|    100|
+| fastLm  |  0.0956|  0.1081|  0.1786|  0.1237|  0.1677|  3.4207|    100|
+| RcppArm |  0.1202|  0.1394|  0.1830|  0.1557|  0.2106|  0.4561|    100|
 
 ### Fast K-Means
 
@@ -243,10 +243,10 @@ microbenchmark(
 
 | expr             |     min|      lq|    mean|  median|      uq|     max|  neval|
 |:-----------------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| kmeans\_trees    |  0.2319|  0.2694|  0.3645|  0.3148|  0.3995|  1.2130|    100|
-| fastKm\_trees    |  0.0175|  0.0328|  0.0467|  0.0390|  0.0518|  0.3151|    100|
-| kmeans\_faithful |  0.2902|  0.3201|  0.4276|  0.3726|  0.4659|  2.2000|    100|
-| fastKm\_faithful |  0.0783|  0.1212|  0.1401|  0.1353|  0.1466|  0.2572|    100|
+| kmeans\_trees    |  0.2260|  0.2421|  0.3179|  0.2593|  0.3645|  0.8182|    100|
+| fastKm\_trees    |  0.0184|  0.0317|  0.0675|  0.0398|  0.0512|  2.5202|    100|
+| kmeans\_faithful |  0.2742|  0.2968|  0.3890|  0.3170|  0.4035|  1.9142|    100|
+| fastKm\_faithful |  0.0764|  0.1222|  0.1473|  0.1353|  0.1497|  0.4749|    100|
 
 Fast Classification
 -------------------
@@ -280,6 +280,8 @@ NumericVector fastNBC(const arma::mat& training_data, const arma::Row<size_t>& l
 }
 ```
 
+For the classification example, we'll use the Iris dataset. (Of course.)
+
 ``` r
 data(iris, package = "datasets")
 set.seed(0)
@@ -294,7 +296,25 @@ ttraining_y <- matrix(as.numeric(training_y) - 1, nrow = 1)
 classes <- length(levels(training_y))
 ttesting_x <- t(testing_x)
 ttesting_y <- matrix(as.numeric(testing_y) - 1, nrow = 1)
+```
 
+I kept getting "Mat::col(): index out of bounds" error when trying to compile. I debugged the heck out of it until I finally looked in **naive\_bayes\_classifier\_impl.hpp** and saw:
+
+``` cpp
+for (size_t j = 0; j < data.n_cols; ++j)
+{
+  const size_t label = labels[j];
+  ++probabilities[label];
+  
+  arma::vec delta = data.col(j) - means.col(label);
+  means.col(label) += delta / probabilities[label];
+  variances.col(label) += delta % (data.col(j) - means.col(label));
+}
+```
+
+Hence why we run into a problem when we use `as.numeric(training_y)` in R and turn that factor into 1s, 2s, and 3s. This makes sense in retrospect but would have been nice to explicitly know that MLPACK expects training data class labels to be 0-based.
+
+``` r
 # Naive Bayes via e1071
 naive_bayes <- e1071::naiveBayes(training_x, training_y)
 predictions <- e1071:::predict.naiveBayes(naive_bayes, testing_x, type = "class")
@@ -352,10 +372,10 @@ microbenchmark(
 ) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
 ```
 
-| expr       |     min|      lq|    mean|  median|      uq|      max|  neval|
-|:-----------|-------:|-------:|-------:|-------:|-------:|--------:|------:|
-| naiveBayes |  4.5351|  4.9761|  6.0332|  5.4253|  6.7501|  12.5152|    100|
-| fastNBC    |  0.0154|  0.0177|  0.0358|  0.0403|  0.0442|   0.0912|    100|
+| expr       |     min|      lq|    mean|  median|     uq|      max|  neval|
+|:-----------|-------:|-------:|-------:|-------:|------:|--------:|------:|
+| naiveBayes |  4.5837|  4.8541|  5.9210|  5.3583|  6.558|  10.4261|    100|
+| fastNBC    |  0.0152|  0.0174|  0.0372|  0.0399|  0.045|   0.2771|    100|
 
 ### External Pointers
 
@@ -429,10 +449,10 @@ microbenchmark(
 ) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
 ```
 
-| expr              |     min|      lq|    mean|  median|      uq|     max|  neval|
-|:------------------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| e1071 prediction  |  3.5037|  3.7720|  4.4267|   4.130|  4.6766|  8.8776|    100|
-| MLPACK prediction |  0.0093|  0.0105|  0.0227|   0.023|  0.0343|  0.0644|    100|
+| expr              |     min|      lq|    mean|  median|      uq|    max|  neval|
+|:------------------|-------:|-------:|-------:|-------:|-------:|------:|------:|
+| e1071 prediction  |  3.5034|  3.7712|  4.5391|  4.1819|  4.9229|  8.601|    100|
+| MLPACK prediction |  0.0095|  0.0111|  0.0541|  0.0284|  0.0354|  2.750|    100|
 
 See [Exposing C++ functions and classes with Rcpp modules](http://dirk.eddelbuettel.com/code/rcpp/Rcpp-modules.pdf) for more information.
 

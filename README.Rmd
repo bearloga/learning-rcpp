@@ -244,7 +244,9 @@ NumericVector fastNBC(const arma::mat& training_data, const arma::Row<size_t>& l
 }
 ```
 
-```{r nbc_example, dependson = 'nbc_source', cache = TRUE}
+For the classification example, we'll use the Iris dataset. (Of course.)
+
+```{r nbc_data, cache = TRUE}
 data(iris, package = "datasets")
 set.seed(0)
 training_idx <- sample.int(nrow(iris), 0.8 * nrow(iris), replace = FALSE)
@@ -258,7 +260,25 @@ ttraining_y <- matrix(as.numeric(training_y) - 1, nrow = 1)
 classes <- length(levels(training_y))
 ttesting_x <- t(testing_x)
 ttesting_y <- matrix(as.numeric(testing_y) - 1, nrow = 1)
+```
 
+I kept getting "Mat::col(): index out of bounds" error when trying to compile. I debugged the heck out of it until I finally looked in **naive_bayes_classifier_impl.hpp** and saw:
+
+```cpp
+for (size_t j = 0; j < data.n_cols; ++j)
+{
+  const size_t label = labels[j];
+  ++probabilities[label];
+  
+  arma::vec delta = data.col(j) - means.col(label);
+  means.col(label) += delta / probabilities[label];
+  variances.col(label) += delta % (data.col(j) - means.col(label));
+}
+```
+
+Hence why we run into a problem when we use `as.numeric(training_y)` in R and turn that factor into 1s, 2s, and 3s. This makes sense in retrospect but would have been nice to explicitly know that MLPACK expects training data class labels to be 0-based.
+
+```{r nbc_example, dependson = 'nbc_source', cache = TRUE}
 # Naive Bayes via e1071
 naive_bayes <- e1071::naiveBayes(training_x, training_y)
 predictions <- e1071:::predict.naiveBayes(naive_bayes, testing_x, type = "class")
