@@ -60,7 +60,8 @@ make install
 ## R Packages
 
 ```R
-install.packages(c("BH", "Rcpp", "RcppArmadillo", "microbenchmark"))
+install.packages(c("BH", "Rcpp", "RcppArmadillo", "microbenchmark", "devtools"))
+devtools::install_github("yihui/printr")
 ```
 
 If you get "ld: library not found for -lgfortran" error when trying to install RcppArmadillo, run:
@@ -81,6 +82,8 @@ library(magrittr)
 library(Rcpp)
 library(RcppArmadillo)
 library(microbenchmark)
+library(knitr)
+library(printr)
 ```
 
 ## Basics
@@ -158,7 +161,7 @@ Okay, let's try to get a fast version of <span title = "Bradley, P. S., & Fayyad
 
 First, install the MLPACK library (see [&sect; Software Libraries](#software-libraries)), then:
 
-```{r kmeans_prereq, cache = TRUE}
+```{r mlpack11, cache = FALSE}
 # Thanks to Kevin Ushey for suggesting Rcpp plugins (e.g. Rcpp:::.plugins$openmp)
 registerPlugin("mlpack11", function() {
   return(list(env = list(
@@ -171,7 +174,7 @@ registerPlugin("mlpack11", function() {
 
 We refer to the documentation for [KMeans](http://www.mlpack.org/docs/mlpack-1.0.6/doxygen.php?doc=kmtutorial.html#kmeans_kmtut) shows, although it seems to incorrectly use `arma::Col<size_t>` for cluster assigments while in practice the cluster assignments are returned as an `arma::Row<size_t>` object.
 
-```{Rcpp kmeans_source, cache = TRUE, dependson = 'kmeans_prereq'}
+```{Rcpp kmeans_source, cache = TRUE, dependson = 'mlpack11'}
 // [[Rcpp::plugins(mlpack11)]]
 // [[Rcpp::depends(RcppArmadillo)]]
 
@@ -188,11 +191,11 @@ NumericVector fastKm(const arma::mat& data, const size_t& clusters) {
   KMeans<> k;
   k.Cluster(data, clusters, assignments);
   // Let's change the format of the output to be a little nicer:
-  NumericVector clust(data.n_cols);
+  NumericVector results(data.n_cols);
   for (int i = 0; i < assignments.n_cols; i++) {
-    clust[i] = assignments(i) + 1; // cluster assignments are 0-based
+    results[i] = assignments(i) + 1; // cluster assignments are 0-based
   }
-  return clust;
+  return results;
 }
 ```
 
@@ -210,13 +213,160 @@ microbenchmark(
 ) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
 ```
 
+## Fast Classification
+
+In this exercise, we will train a [Naive Bayes classifier from MLPACK](http://www.mlpack.org/docs/mlpack-2.1.0/doxygen.php?doc=classmlpack_1_1naive__bayes_1_1NaiveBayesClassifier.html). First, we train and classify in a single step. Then we will store the trained classifier in memory, and then later we will be able to save the model. Storing the trained model requires [serialization](https://en.wikipedia.org/wiki/Serialization), the topic of the next section.
+
+```{Rcpp nbc_source, dependson = 'mlpack11', cache = TRUE}
+// [[Rcpp::plugins(mlpack11)]]
+// [[Rcpp::depends(RcppArmadillo)]]
+
+#include <RcppArmadillo.h>
+using namespace Rcpp;
+#include <mlpack/core/util/log.hpp>
+#include <mlpack/methods/naive_bayes/naive_bayes_classifier.hpp>
+using namespace mlpack::naive_bayes;
+using namespace arma;
+
+// [[Rcpp::export]]
+NumericVector fastNBC(const arma::mat& training_data, const arma::Row<size_t>& labels, const size_t& classes, const arma::mat& new_data) {
+  // Initialization & training:
+  NaiveBayesClassifier<> nbc(training_data, labels, classes);
+  // Prediction:
+  arma::Row<size_t> predictions;
+  nbc.Classify(new_data, predictions);
+  // Let's change the format of the output to be a little nicer:
+  NumericVector results(predictions.n_cols);
+  for (int i = 0; i < predictions.n_cols; ++i) {
+    results[i] = predictions(i);
+  }
+  return results;
+}
+```
+
+```{r nbc_example, dependson = 'nbc_source', cache = TRUE}
+data(iris, package = "datasets")
+set.seed(0)
+training_idx <- sample.int(nrow(iris), 0.8 * nrow(iris), replace = FALSE)
+training_x <- unname(as.matrix(iris[training_idx, 1:4]))
+training_y <- unname(iris$Species[training_idx])
+testing_x <- unname(as.matrix(iris[-training_idx, 1:4]))
+testing_y <- unname(iris$Species[-training_idx])
+# For fastNBC:
+ttraining_x <- t(training_x)
+ttraining_y <- matrix(as.numeric(training_y) - 1, nrow = 1)
+classes <- length(levels(training_y))
+ttesting_x <- t(testing_x)
+ttesting_y <- matrix(as.numeric(testing_y) - 1, nrow = 1)
+
+# Naive Bayes via e1071
+naive_bayes <- e1071::naiveBayes(training_x, training_y)
+predictions <- e1071:::predict.naiveBayes(naive_bayes, testing_x, type = "class")
+confusion_matrix <- caret::confusionMatrix(
+  data = predictions,
+  reference = testing_y
+)
+confusion_matrix$table
+print(confusion_matrix$overall["Accuracy"])
+
+# Naive Bayes via MLPACK
+predictions <- fastNBC(ttraining_x, ttraining_y, classes, ttesting_x)
+confusion_matrix <- caret::confusionMatrix(
+  data = predictions,
+  reference = ttesting_y
+)
+confusion_matrix$table
+print(confusion_matrix$overall["Accuracy"])
+
+# Performance Comparison
+microbenchmark(
+  naiveBayes = {
+    naive_bayes <- e1071::naiveBayes(training_x, training_y)
+    predictions <- e1071:::predict.naiveBayes(naive_bayes, testing_x, type = "class")
+  },
+  fastNBC = fastNBC(ttraining_x, ttraining_y, classes, ttesting_x)
+) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
+```
+
+### External Pointers
+
+In the next step, we'll train a Naive Bayes classifier and keep that trained object in memory to make classification a separate step. Notice that we have to:
+
+- declare a pointer: `NaiveBayesClassifier<>* nbc = new NaiveBayesClassifier<>(...)`
+- use Rcpp's external pointers (`Rcpp::XPtr`) and
+- return an [S-expression](http://adv-r.had.co.nz/C-interface.html#c-data-structures) (`SEXP`).
+
+```{Rcpp nb_train_source, dependson = 'mlpack11', cache = TRUE}
+// [[Rcpp::plugins(mlpack11)]]
+// [[Rcpp::depends(RcppArmadillo)]]
+
+#include <RcppArmadillo.h>
+using namespace Rcpp;
+#include <mlpack/core/util/log.hpp>
+#include <mlpack/methods/naive_bayes/naive_bayes_classifier.hpp>
+using namespace mlpack::naive_bayes;
+using namespace arma;
+
+// [[Rcpp::export]]
+SEXP nbTrain(const arma::mat& training_data, const arma::Row<size_t>& labels, const size_t& classes) {
+  // Initialization & training:
+  NaiveBayesClassifier<>* nbc = new NaiveBayesClassifier<>(training_data, labels, classes);
+  Rcpp::XPtr<NaiveBayesClassifier<>> p(nbc, true);
+  return p;
+}
+```
+
+```{r nbc_example_2a, dependson = 'nbc_example', cache = FALSE}
+fit <- nbTrain(ttraining_x, ttraining_y, classes)
+str(fit)
+```
+
+`fit` is an external pointer to some memory. When we pass it to a C++ function, it's passed as an R data type (SEXP) that we have to convert to an external pointer before we can use the object's methods. Notice that we're now calling `nbc->Classify()` instead of `nbc.Classify()`.
+
+```{Rcpp nb_classify_source, dependson = c('mlpack11', 'nb_train_source'), cache = TRUE}
+// [[Rcpp::plugins(mlpack11)]]
+// [[Rcpp::depends(RcppArmadillo)]]
+
+#include <RcppArmadillo.h>
+using namespace Rcpp;
+#include <mlpack/core/util/log.hpp>
+#include <mlpack/methods/naive_bayes/naive_bayes_classifier.hpp>
+using namespace mlpack::naive_bayes;
+using namespace arma;
+
+// [[Rcpp::export]]
+NumericVector nbClassify(SEXP xp, const arma::mat& new_data) {
+  XPtr<NaiveBayesClassifier<>> nbc(xp);
+  // Prediction:
+  arma::Row<size_t> predictions;
+  nbc->Classify(new_data, predictions);
+  // Let's change the format of the output to be a little nicer:
+  NumericVector results(predictions.n_cols);
+  for (int i = 0; i < predictions.n_cols; ++i) {
+    results[i] = predictions(i);
+  }
+  return results;
+}
+```
+
+```{r nbc_example_2b, dependson = c('nb_classify_source', 'nbc_example_2a'), cache = FALSE}
+fit_e1071 <- e1071::naiveBayes(training_x, training_y)
+# Performance Comparison
+microbenchmark(
+  `e1071 prediction` = e1071:::predict.naiveBayes(fit_e1071, testing_x, type = "class"),
+  `MLPACK prediction` = nbClassify(fit, ttesting_x)
+) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
+```
+
+See [Exposing C++ functions and classes with Rcpp modules](http://dirk.eddelbuettel.com/code/rcpp/Rcpp-modules.pdf) for more information.
+
 ## Object Serialization
 
 Serialization and deserialization require C++11 (`// [[Rcpp::plugins(cpp11)]]`), [cereal](https://github.com/USCiLab/cereal) via [Rcereal](https://cran.rstudio.com/package=Rcereal) (`// [[Rcpp::depends(Rcereal)]]`), and [boost](http://www.boost.org/) via [BH](https://cran.rstudio.com/package=BH) (`// [[Rcpp::depends(BH)]]`). See [Serialization of trie objects](https://github.com/Ironholds/triebeard/issues/9) discussion from Oliver et al.'s [triebeard](https://cran.rstudio.com/package=triebeard) package and [Serialize and Deserialize a C++ Object in Rcpp](http://gallery.rcpp.org/articles/rcpp-serialization/) article.
 
 ### Simple Example
 
-### Fast Classification
+### Fast Classification Revisited
 
 #### Training
 

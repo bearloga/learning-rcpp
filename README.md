@@ -11,9 +11,11 @@ My main goal in this educational endeavor is to be able to use the [MLPACK](http
     -   [Using Libraries](#using-libraries)
         -   [Armadillo vs RcppArmadillo](#armadillo-vs-rcpparmadillo)
         -   [Fast K-Means](#fast-k-means)
+    -   [Fast Classification](#fast-classification)
+        -   [External Pointers](#external-pointers)
     -   [Object Serialization](#object-serialization)
         -   [Simple Example](#simple-example)
-        -   [Fast Classification](#fast-classification)
+        -   [Fast Classification Revisited](#fast-classification-revisited)
             -   [Training](#training)
             -   [Prediction](#prediction)
 -   [References](#references)
@@ -71,7 +73,8 @@ R Packages
 ----------
 
 ``` r
-install.packages(c("BH", "Rcpp", "RcppArmadillo", "microbenchmark"))
+install.packages(c("BH", "Rcpp", "RcppArmadillo", "microbenchmark", "devtools"))
+devtools::install_github("yihui/printr")
 ```
 
 If you get "ld: library not found for -lgfortran" error when trying to install RcppArmadillo, run:
@@ -93,6 +96,8 @@ library(magrittr)
 library(Rcpp)
 library(RcppArmadillo)
 library(microbenchmark)
+library(knitr)
+library(printr)
 ```
 
 Basics
@@ -132,9 +137,9 @@ microbenchmark(
 
 | expr   |     min|      lq|    mean|  median|      uq|     max|  neval|
 |:-------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| native |  0.0025|  0.0033|  0.0060|  0.0045|  0.0072|  0.0446|    100|
-| loop   |  0.8803|  1.0589|  1.4099|  1.2361|  1.6170|  3.8196|    100|
-| Rcpp   |  0.0043|  0.0064|  0.0125|  0.0118|  0.0159|  0.0329|    100|
+| native |  0.0025|  0.0028|  0.0050|  0.0040|  0.0058|  0.0136|    100|
+| loop   |  0.8780|  1.0469|  1.3214|  1.1346|  1.5519|  3.4080|    100|
+| Rcpp   |  0.0043|  0.0054|  0.0116|  0.0088|  0.0140|  0.0544|    100|
 
 Using Libraries
 ---------------
@@ -172,9 +177,9 @@ microbenchmark(
 
 | expr    |     min|      lq|    mean|  median|      uq|     max|  neval|
 |:--------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| lm      |  0.8885|  1.0258|  1.4476|  1.3170|  1.7037|  3.9269|    100|
-| fastLm  |  0.0968|  0.1144|  0.1627|  0.1405|  0.1767|  0.7230|    100|
-| RcppArm |  0.1205|  0.1500|  0.2136|  0.1794|  0.2509|  0.7807|    100|
+| lm      |  0.8590|  1.0120|  1.4075|  1.2079|  1.6621|  3.7233|    100|
+| fastLm  |  0.0910|  0.1128|  0.1484|  0.1319|  0.1710|  0.4755|    100|
+| RcppArm |  0.1202|  0.1411|  0.2141|  0.1812|  0.2383|  0.9629|    100|
 
 ### Fast K-Means
 
@@ -214,11 +219,11 @@ NumericVector fastKm(const arma::mat& data, const size_t& clusters) {
   KMeans<> k;
   k.Cluster(data, clusters, assignments);
   // Let's change the format of the output to be a little nicer:
-  NumericVector clust(data.n_cols);
+  NumericVector results(data.n_cols);
   for (int i = 0; i < assignments.n_cols; i++) {
-    clust[i] = assignments(i) + 1; // cluster assignments are 0-based
+    results[i] = assignments(i) + 1; // cluster assignments are 0-based
   }
-  return clust;
+  return results;
 }
 ```
 
@@ -238,10 +243,198 @@ microbenchmark(
 
 | expr             |     min|      lq|    mean|  median|      uq|     max|  neval|
 |:-----------------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| kmeans\_trees    |  0.2255|  0.2459|  0.3058|  0.2682|  0.3221|  0.6369|    100|
-| fastKm\_trees    |  0.0175|  0.0321|  0.0469|  0.0411|  0.0582|  0.1308|    100|
-| kmeans\_faithful |  0.2753|  0.2933|  0.3926|  0.3220|  0.4231|  1.8311|    100|
-| fastKm\_faithful |  0.0751|  0.1183|  0.1435|  0.1269|  0.1499|  0.3685|    100|
+| kmeans\_trees    |  0.2319|  0.2694|  0.3645|  0.3148|  0.3995|  1.2130|    100|
+| fastKm\_trees    |  0.0175|  0.0328|  0.0467|  0.0390|  0.0518|  0.3151|    100|
+| kmeans\_faithful |  0.2902|  0.3201|  0.4276|  0.3726|  0.4659|  2.2000|    100|
+| fastKm\_faithful |  0.0783|  0.1212|  0.1401|  0.1353|  0.1466|  0.2572|    100|
+
+Fast Classification
+-------------------
+
+In this exercise, we will train a [Naive Bayes classifier from MLPACK](http://www.mlpack.org/docs/mlpack-2.1.0/doxygen.php?doc=classmlpack_1_1naive__bayes_1_1NaiveBayesClassifier.html). First, we train and classify in a single step. Then we will store the trained classifier in memory, and then later we will be able to save the model. Storing the trained model requires [serialization](https://en.wikipedia.org/wiki/Serialization), the topic of the next section.
+
+``` cpp
+// [[Rcpp::plugins(mlpack11)]]
+// [[Rcpp::depends(RcppArmadillo)]]
+
+#include <RcppArmadillo.h>
+using namespace Rcpp;
+#include <mlpack/core/util/log.hpp>
+#include <mlpack/methods/naive_bayes/naive_bayes_classifier.hpp>
+using namespace mlpack::naive_bayes;
+using namespace arma;
+
+// [[Rcpp::export]]
+NumericVector fastNBC(const arma::mat& training_data, const arma::Row<size_t>& labels, const size_t& classes, const arma::mat& new_data) {
+  // Initialization & training:
+  NaiveBayesClassifier<> nbc(training_data, labels, classes);
+  // Prediction:
+  arma::Row<size_t> predictions;
+  nbc.Classify(new_data, predictions);
+  // Let's change the format of the output to be a little nicer:
+  NumericVector results(predictions.n_cols);
+  for (int i = 0; i < predictions.n_cols; ++i) {
+    results[i] = predictions(i);
+  }
+  return results;
+}
+```
+
+``` r
+data(iris, package = "datasets")
+set.seed(0)
+training_idx <- sample.int(nrow(iris), 0.8 * nrow(iris), replace = FALSE)
+training_x <- unname(as.matrix(iris[training_idx, 1:4]))
+training_y <- unname(iris$Species[training_idx])
+testing_x <- unname(as.matrix(iris[-training_idx, 1:4]))
+testing_y <- unname(iris$Species[-training_idx])
+# For fastNBC:
+ttraining_x <- t(training_x)
+ttraining_y <- matrix(as.numeric(training_y) - 1, nrow = 1)
+classes <- length(levels(training_y))
+ttesting_x <- t(testing_x)
+ttesting_y <- matrix(as.numeric(testing_y) - 1, nrow = 1)
+
+# Naive Bayes via e1071
+naive_bayes <- e1071::naiveBayes(training_x, training_y)
+predictions <- e1071:::predict.naiveBayes(naive_bayes, testing_x, type = "class")
+confusion_matrix <- caret::confusionMatrix(
+  data = predictions,
+  reference = testing_y
+)
+confusion_matrix$table
+```
+
+| Prediction/Reference |  setosa|  versicolor|  virginica|
+|:---------------------|-------:|-----------:|----------:|
+| setosa               |       9|           0|          0|
+| versicolor           |       0|          11|          1|
+| virginica            |       0|           0|          9|
+
+``` r
+print(confusion_matrix$overall["Accuracy"])
+```
+
+    ## Accuracy 
+    ##   0.9667
+
+``` r
+# Naive Bayes via MLPACK
+predictions <- fastNBC(ttraining_x, ttraining_y, classes, ttesting_x)
+confusion_matrix <- caret::confusionMatrix(
+  data = predictions,
+  reference = ttesting_y
+)
+confusion_matrix$table
+```
+
+| Prediction/Reference |    0|    1|    2|
+|:---------------------|----:|----:|----:|
+| 0                    |    9|    0|    0|
+| 1                    |    0|   11|    1|
+| 2                    |    0|    0|    9|
+
+``` r
+print(confusion_matrix$overall["Accuracy"])
+```
+
+    ## Accuracy 
+    ##   0.9667
+
+``` r
+# Performance Comparison
+microbenchmark(
+  naiveBayes = {
+    naive_bayes <- e1071::naiveBayes(training_x, training_y)
+    predictions <- e1071:::predict.naiveBayes(naive_bayes, testing_x, type = "class")
+  },
+  fastNBC = fastNBC(ttraining_x, ttraining_y, classes, ttesting_x)
+) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
+```
+
+| expr       |     min|      lq|    mean|  median|      uq|      max|  neval|
+|:-----------|-------:|-------:|-------:|-------:|-------:|--------:|------:|
+| naiveBayes |  4.5351|  4.9761|  6.0332|  5.4253|  6.7501|  12.5152|    100|
+| fastNBC    |  0.0154|  0.0177|  0.0358|  0.0403|  0.0442|   0.0912|    100|
+
+### External Pointers
+
+In the next step, we'll train a Naive Bayes classifier and keep that trained object in memory to make classification a separate step. Notice that we have to:
+
+-   declare a pointer: `NaiveBayesClassifier<>* nbc = new NaiveBayesClassifier<>(...)`
+-   use Rcpp's external pointers (`Rcpp::XPtr`) and
+-   return an [S-expression](http://adv-r.had.co.nz/C-interface.html#c-data-structures) (`SEXP`).
+
+``` cpp
+// [[Rcpp::plugins(mlpack11)]]
+// [[Rcpp::depends(RcppArmadillo)]]
+
+#include <RcppArmadillo.h>
+using namespace Rcpp;
+#include <mlpack/core/util/log.hpp>
+#include <mlpack/methods/naive_bayes/naive_bayes_classifier.hpp>
+using namespace mlpack::naive_bayes;
+using namespace arma;
+
+// [[Rcpp::export]]
+SEXP nbTrain(const arma::mat& training_data, const arma::Row<size_t>& labels, const size_t& classes) {
+  // Initialization & training:
+  NaiveBayesClassifier<>* nbc = new NaiveBayesClassifier<>(training_data, labels, classes);
+  Rcpp::XPtr<NaiveBayesClassifier<>> p(nbc, true);
+  return p;
+}
+```
+
+``` r
+fit <- nbTrain(ttraining_x, ttraining_y, classes)
+str(fit)
+```
+
+    ## <externalptr>
+
+`fit` is an external pointer to some memory. When we pass it to a C++ function, it's passed as an R data type (SEXP) that we have to convert to an external pointer before we can use the object's methods. Notice that we're now calling `nbc->Classify()` instead of `nbc.Classify()`.
+
+``` cpp
+// [[Rcpp::plugins(mlpack11)]]
+// [[Rcpp::depends(RcppArmadillo)]]
+
+#include <RcppArmadillo.h>
+using namespace Rcpp;
+#include <mlpack/core/util/log.hpp>
+#include <mlpack/methods/naive_bayes/naive_bayes_classifier.hpp>
+using namespace mlpack::naive_bayes;
+using namespace arma;
+
+// [[Rcpp::export]]
+NumericVector nbClassify(SEXP xp, const arma::mat& new_data) {
+  XPtr<NaiveBayesClassifier<>> nbc(xp);
+  // Prediction:
+  arma::Row<size_t> predictions;
+  nbc->Classify(new_data, predictions);
+  // Let's change the format of the output to be a little nicer:
+  NumericVector results(predictions.n_cols);
+  for (int i = 0; i < predictions.n_cols; ++i) {
+    results[i] = predictions(i);
+  }
+  return results;
+}
+```
+
+``` r
+fit_e1071 <- e1071::naiveBayes(training_x, training_y)
+# Performance Comparison
+microbenchmark(
+  `e1071 prediction` = e1071:::predict.naiveBayes(fit_e1071, testing_x, type = "class"),
+  `MLPACK prediction` = nbClassify(fit, ttesting_x)
+) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
+```
+
+| expr              |     min|      lq|    mean|  median|      uq|     max|  neval|
+|:------------------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
+| e1071 prediction  |  3.5037|  3.7720|  4.4267|   4.130|  4.6766|  8.8776|    100|
+| MLPACK prediction |  0.0093|  0.0105|  0.0227|   0.023|  0.0343|  0.0644|    100|
+
+See [Exposing C++ functions and classes with Rcpp modules](http://dirk.eddelbuettel.com/code/rcpp/Rcpp-modules.pdf) for more information.
 
 Object Serialization
 --------------------
@@ -250,7 +443,7 @@ Serialization and deserialization require C++11 (`// [[Rcpp::plugins(cpp11)]]`),
 
 ### Simple Example
 
-### Fast Classification
+### Fast Classification Revisited
 
 #### Training
 
