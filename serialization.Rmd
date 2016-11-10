@@ -1,0 +1,114 @@
+---
+output:
+  md_document:
+    variant: markdown_github
+---
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(digits = 4)
+```
+
+# Setup on OSX
+
+```bash
+## To install Homebrew:
+/usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+## Then:
+brew tap homebrew/versions && brew tap homebrew/science && brew update
+# brew install gcc --enable-cxx && brew link --overwrite gcc && brew link cmake
+brew install boost --c++11
+# Installing cmake may require: sudo chown -R `whoami` /usr/local/share/man/man7
+brew install mlpack shark dlib
+```
+
+```R
+install.packages(c(
+  "BH", # Header files for 'Boost' C++ library
+  "Rcpp", # R and C++ integration
+  "RcppArmadillo", # Rcpp integration for 'Armadillo' linear algebra library
+  "Rcereal", # header files of 'cereal', a C++11 library for serialization
+  "microbenchmark", # For benchmarking performance
+  "devtools", # For installing packages from GitHub
+  "magrittr", # For piping
+  "knitr" # For printing tables & data.frames as Markdown
+), repos = "https://cran.rstudio.com/")
+devtools::install_github("yihui/printr") # Prettier table printing
+```
+
+If you get "ld: library not found for -lgfortran" error when trying to install RcppArmadillo, run:
+
+```bash
+curl -O http://r.research.att.com/libs/gfortran-4.8.2-darwin13.tar.bz2
+sudo tar fvxz gfortran-4.8.2-darwin13.tar.bz2 -C /
+```
+
+See "[Rcpp, RcppArmadillo and OS X Mavericks "-lgfortran" and "-lquadmath" error](http://thecoatlessprofessor.com/programming/rcpp-rcpparmadillo-and-os-x-mavericks-lgfortran-and-lquadmath-error/)"" for more info.
+
+# Rcpp
+
+See [this section](http://rmarkdown.rstudio.com/authoring_knitr_engines.html#rcpp) in [RMarkdown documentation](http://rmarkdown.rstudio.com/) for details on Rcpp chunks.
+
+```{r load_pkg}
+library(magrittr)
+library(Rcpp)
+library(RcppArmadillo)
+library(Rcereal)
+```
+
+# Serialization via Boost
+
+Taking the GPS example from Boost documentation's [tutorial on serialization](http://www.boost.org/doc/libs/1_62_0/libs/serialization/doc/tutorial.html), using some of the code from [Rcereal's README](https://github.com/wush978/Rcereal/blob/master/README.md#getting-started).
+
+```{Rcpp boost}
+// [[Rcpp::plugins(cpp11)]]
+// [[Rcpp::depends(BH)]]
+#include <Rcpp.h>
+using namespace Rcpp;
+#include <boost/archive/archive_exception.hpp>
+#include <boost/archive/binary_oarchive.hpp>
+
+class gps_position
+{
+public:
+    int degrees;
+    int minutes;
+    float seconds;
+    gps_position(){};
+    gps_position(int d, int m, float s) :
+        degrees(d), minutes(m), seconds(s)
+    {}
+};
+
+namespace boost {
+  namespace serialization {
+  
+    template<class Archive>
+    void serialize(Archive & ar, gps_position & g, const unsigned int version)
+    {
+        ar & g.degrees;
+        ar & g.minutes;
+        ar & g.seconds;
+    }
+  
+  } // namespace serialization
+} // namespace boost
+
+// [[Rcpp::export]]
+RawVector serializeGPS(int d, int m, float s) {
+  gps_position g(d, m, s);
+  std::stringstream ss;
+  {
+    boost::archive::binary_oarchive oa(ss);
+    oa << g;
+  }
+  ss.seekg(0, ss.end);
+  RawVector retval(ss.tellg());
+  ss.seekg(0, ss.beg);
+  ss.read(reinterpret_cast<char*>(&retval[0]), retval.size());
+  return retval;
+}
+```
+
+```{r}
+serializeGPS(35L, 52L, 0.3)
+```
