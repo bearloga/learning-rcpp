@@ -14,10 +14,10 @@ My main goal in this educational endeavor is to be able to use the [MLPACK](http
     -   [Fast Classification](#fast-classification)
         -   [External Pointers](#external-pointers)
     -   [Object Serialization](#object-serialization)
-        -   [Simple Example](#simple-example)
+    -   [Example](#example)
         -   [Fast Classification Revisited](#fast-classification-revisited)
-            -   [Training](#training)
-            -   [Prediction](#prediction)
+            -   [Training (Serialization)](#training-serialization)
+            -   [Prediction (Deserialization)](#prediction-deserialization)
 -   [References](#references)
 
 Setup
@@ -73,8 +73,17 @@ R Packages
 ----------
 
 ``` r
-install.packages(c("BH", "Rcpp", "RcppArmadillo", "microbenchmark", "devtools"))
-devtools::install_github("yihui/printr")
+install.packages(c(
+  "BH", # Header files for 'Boost' C++ library
+  "Rcpp", # R and C++ integration
+  "RcppArmadillo", # Rcpp integration for 'Armadillo' linear algebra library
+  "Rcereal", # header files of 'cereal', a C++11 library for serialization
+  "microbenchmark", # For benchmarking performance
+  "devtools", # For installing packages from GitHub
+  "magrittr", # For piping
+  "knitr" # For printing tables & data.frames as Markdown
+), repos = "https://cran.rstudio.com/")
+devtools::install_github("yihui/printr") # Prettier table printing
 ```
 
 If you get "ld: library not found for -lgfortran" error when trying to install RcppArmadillo, run:
@@ -95,6 +104,7 @@ See [this section](http://rmarkdown.rstudio.com/authoring_knitr_engines.html#rcp
 library(magrittr)
 library(Rcpp)
 library(RcppArmadillo)
+library(Rcereal)
 library(microbenchmark)
 library(knitr)
 library(printr)
@@ -137,9 +147,9 @@ microbenchmark(
 
 | expr   |     min|      lq|    mean|  median|      uq|     max|  neval|
 |:-------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| native |  0.0025|  0.0029|  0.0052|  0.0043|  0.0064|  0.0172|    100|
-| loop   |  0.9133|  1.0851|  1.3737|  1.2399|  1.6022|  2.7706|    100|
-| Rcpp   |  0.0044|  0.0057|  0.0131|  0.0112|  0.0172|  0.0516|    100|
+| native |  0.0025|  0.0028|  0.0047|  0.0041|  0.0052|  0.0298|    100|
+| loop   |  0.8758|  0.9859|  1.2629|  1.1102|  1.3949|  2.8459|    100|
+| Rcpp   |  0.0042|  0.0053|  0.0112|  0.0095|  0.0140|  0.0696|    100|
 
 Using Libraries
 ---------------
@@ -177,9 +187,9 @@ microbenchmark(
 
 | expr    |     min|      lq|    mean|  median|      uq|     max|  neval|
 |:--------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| lm      |  0.8646|  0.9417|  1.2413|  1.0756|  1.3839|  3.0538|    100|
-| fastLm  |  0.0956|  0.1081|  0.1786|  0.1237|  0.1677|  3.4207|    100|
-| RcppArm |  0.1202|  0.1394|  0.1830|  0.1557|  0.2106|  0.4561|    100|
+| lm      |  0.8654|  0.9387|  1.2709|  1.0643|  1.4281|  4.5091|    100|
+| fastLm  |  0.0940|  0.1151|  0.1671|  0.1383|  0.2059|  0.7095|    100|
+| RcppArm |  0.1190|  0.1522|  0.2033|  0.1781|  0.2504|  0.4193|    100|
 
 ### Fast K-Means
 
@@ -243,10 +253,10 @@ microbenchmark(
 
 | expr             |     min|      lq|    mean|  median|      uq|     max|  neval|
 |:-----------------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| kmeans\_trees    |  0.2260|  0.2421|  0.3179|  0.2593|  0.3645|  0.8182|    100|
-| fastKm\_trees    |  0.0184|  0.0317|  0.0675|  0.0398|  0.0512|  2.5202|    100|
-| kmeans\_faithful |  0.2742|  0.2968|  0.3890|  0.3170|  0.4035|  1.9142|    100|
-| fastKm\_faithful |  0.0764|  0.1222|  0.1473|  0.1353|  0.1497|  0.4749|    100|
+| kmeans\_trees    |  0.2299|  0.2514|  0.3324|  0.2768|  0.3459|  2.5481|    100|
+| fastKm\_trees    |  0.0195|  0.0331|  0.0446|  0.0423|  0.0528|  0.0874|    100|
+| kmeans\_faithful |  0.2822|  0.3069|  0.3905|  0.3382|  0.4266|  1.2566|    100|
+| fastKm\_faithful |  0.0781|  0.1216|  0.1457|  0.1345|  0.1528|  0.2686|    100|
 
 Fast Classification
 -------------------
@@ -259,10 +269,10 @@ In this exercise, we will train a [Naive Bayes classifier from MLPACK](http://ww
 
 #include <RcppArmadillo.h>
 using namespace Rcpp;
+
 #include <mlpack/core/util/log.hpp>
 #include <mlpack/methods/naive_bayes/naive_bayes_classifier.hpp>
 using namespace mlpack::naive_bayes;
-using namespace arma;
 
 // [[Rcpp::export]]
 NumericVector fastNBC(const arma::mat& training_data, const arma::Row<size_t>& labels, const size_t& classes, const arma::mat& new_data) {
@@ -374,8 +384,8 @@ microbenchmark(
 
 | expr       |     min|      lq|    mean|  median|     uq|      max|  neval|
 |:-----------|-------:|-------:|-------:|-------:|------:|--------:|------:|
-| naiveBayes |  4.5837|  4.8541|  5.9210|  5.3583|  6.558|  10.4261|    100|
-| fastNBC    |  0.0152|  0.0174|  0.0372|  0.0399|  0.045|   0.2771|    100|
+| naiveBayes |  4.5974|  5.0490|  6.2130|  5.5430|  6.932|  12.9500|    100|
+| fastNBC    |  0.0152|  0.0179|  0.0352|  0.0403|  0.044|   0.0835|    100|
 
 ### External Pointers
 
@@ -391,13 +401,13 @@ In the next step, we'll train a Naive Bayes classifier and keep that trained obj
 
 #include <RcppArmadillo.h>
 using namespace Rcpp;
+
 #include <mlpack/core/util/log.hpp>
 #include <mlpack/methods/naive_bayes/naive_bayes_classifier.hpp>
 using namespace mlpack::naive_bayes;
-using namespace arma;
 
 // [[Rcpp::export]]
-SEXP nbTrain(const arma::mat& training_data, const arma::Row<size_t>& labels, const size_t& classes) {
+SEXP nbTrainXPtr(const arma::mat& training_data, const arma::Row<size_t>& labels, const size_t& classes) {
   // Initialization & training:
   NaiveBayesClassifier<>* nbc = new NaiveBayesClassifier<>(training_data, labels, classes);
   Rcpp::XPtr<NaiveBayesClassifier<>> p(nbc, true);
@@ -406,7 +416,7 @@ SEXP nbTrain(const arma::mat& training_data, const arma::Row<size_t>& labels, co
 ```
 
 ``` r
-fit <- nbTrain(ttraining_x, ttraining_y, classes)
+fit <- nbTrainXPtr(ttraining_x, ttraining_y, classes)
 str(fit)
 ```
 
@@ -420,13 +430,13 @@ str(fit)
 
 #include <RcppArmadillo.h>
 using namespace Rcpp;
+
 #include <mlpack/core/util/log.hpp>
 #include <mlpack/methods/naive_bayes/naive_bayes_classifier.hpp>
 using namespace mlpack::naive_bayes;
-using namespace arma;
 
 // [[Rcpp::export]]
-NumericVector nbClassify(SEXP xp, const arma::mat& new_data) {
+NumericVector nbClassifyXPtr(SEXP xp, const arma::mat& new_data) {
   XPtr<NaiveBayesClassifier<>> nbc(xp);
   // Prediction:
   arma::Row<size_t> predictions;
@@ -445,29 +455,237 @@ fit_e1071 <- e1071::naiveBayes(training_x, training_y)
 # Performance Comparison
 microbenchmark(
   `e1071 prediction` = e1071:::predict.naiveBayes(fit_e1071, testing_x, type = "class"),
-  `MLPACK prediction` = nbClassify(fit, ttesting_x)
+  `MLPACK prediction` = nbClassifyXPtr(fit, ttesting_x)
 ) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
 ```
 
-| expr              |     min|      lq|    mean|  median|      uq|    max|  neval|
-|:------------------|-------:|-------:|-------:|-------:|-------:|------:|------:|
-| e1071 prediction  |  3.5034|  3.7712|  4.5391|  4.1819|  4.9229|  8.601|    100|
-| MLPACK prediction |  0.0095|  0.0111|  0.0541|  0.0284|  0.0354|  2.750|    100|
+| expr              |     min|      lq|    mean|  median|     uq|     max|  neval|
+|:------------------|-------:|-------:|-------:|-------:|------:|-------:|------:|
+| e1071 prediction  |  3.6011|  3.9952|  4.7748|   4.390|  5.322|  9.1300|    100|
+| MLPACK prediction |  0.0095|  0.0118|  0.0316|   0.032|  0.038|  0.1407|    100|
 
 See [Exposing C++ functions and classes with Rcpp modules](http://dirk.eddelbuettel.com/code/rcpp/Rcpp-modules.pdf) for more information.
 
 Object Serialization
 --------------------
 
-Serialization and deserialization require C++11 (`// [[Rcpp::plugins(cpp11)]]`), [cereal](https://github.com/USCiLab/cereal) via [Rcereal](https://cran.rstudio.com/package=Rcereal) (`// [[Rcpp::depends(Rcereal)]]`), and [boost](http://www.boost.org/) via [BH](https://cran.rstudio.com/package=BH) (`// [[Rcpp::depends(BH)]]`). See [Serialization of trie objects](https://github.com/Ironholds/triebeard/issues/9) discussion from Oliver et al.'s [triebeard](https://cran.rstudio.com/package=triebeard) package and [Serialize and Deserialize a C++ Object in Rcpp](http://gallery.rcpp.org/articles/rcpp-serialization/) article.
+Example
+-------
 
-### Simple Example
+Taking the GPS example from Boost documentation's [tutorial on serialization](http://www.boost.org/doc/libs/1_62_0/libs/serialization/doc/tutorial.html), using some of the code from [Rcereal's README](https://github.com/wush978/Rcereal/blob/master/README.md#getting-started).
+
+``` cpp
+// [[Rcpp::plugins(cpp11)]]
+#include <Rcpp.h>
+using namespace Rcpp;
+
+// [[Rcpp::depends(BH)]]
+#include <boost/archive/binary_oarchive.hpp>
+
+class gps_position
+{
+public:
+    int degrees;
+    int minutes;
+    float seconds;
+    gps_position(){};
+    gps_position(int d, int m, float s) :
+        degrees(d), minutes(m), seconds(s)
+    {}
+};
+
+namespace boost {
+  namespace serialization {
+  
+    template<class Archive>
+    void serialize(Archive & ar, gps_position & g, const unsigned int version)
+    {
+        ar & g.degrees;
+        ar & g.minutes;
+        ar & g.seconds;
+    }
+  
+  } // namespace serialization
+} // namespace boost
+
+// [[Rcpp::export]]
+RawVector serializeGPS(int d, int m, float s) {
+  gps_position g(d, m, s);
+  std::stringstream ss;
+  {
+    boost::archive::binary_oarchive oa(ss);
+    oa << g;
+  }
+  ss.seekg(0, ss.end);
+  RawVector retval(ss.tellg());
+  ss.seekg(0, ss.beg);
+  ss.read(reinterpret_cast<char*>(&retval[0]), retval.size());
+  return retval;
+}
+```
+
+``` r
+serializeGPS(35L, 52L, 0.3)
+```
+
+    *** caught segfault ***
+    address 0x0, cause 'unknown'
+
+AWESOME.
+
+``` cpp
+// [[Rcpp::plugins(cpp11)]]
+
+/* The serialization/deserialization function name to search for.
+   You can define CEREAL_SERIALIZE_FUNCTION_NAME to be different,
+   assuming you do so before <cereal/macros.hpp> is included. */
+#define CEREAL_SERIALIZE_FUNCTION_NAME Serialize
+// [[Rcpp::depends(Rcereal)]]
+
+#include <sstream>
+#include <cereal/archives/binary.hpp>
+#include <Rcpp.h>
+
+struct MyClass
+{
+  int x, y, z;
+
+  // This method lets cereal know which data members to serialize
+  template<class Archive>
+  void Serialize(Archive& archive)
+  {
+    archive( x, y, z ); // serialize things by passing them to the archive
+  }
+};
+
+using namespace Rcpp;
+//[[Rcpp::export]]
+RawVector serialize_myclass(int x = 1, int y = 2, int z = 3) {
+  MyClass my_instance;
+  my_instance.x = x;
+  my_instance.y = y;
+  my_instance.z = z;
+  std::stringstream ss;
+  {
+    cereal::BinaryOutputArchive oarchive(ss); // Create an output archive
+    oarchive(my_instance);
+  }
+  ss.seekg(0, ss.end);
+  RawVector retval(ss.tellg());
+  ss.seekg(0, ss.beg);
+  ss.read(reinterpret_cast<char*>(&retval[0]), retval.size());
+  return retval;
+}
+
+//[[Rcpp::export]]
+void deserialize_myclass(RawVector src) {
+  std::stringstream ss;
+  ss.write(reinterpret_cast<char*>(&src[0]), src.size());
+  ss.seekg(0, ss.beg);
+  MyClass my_instance;
+  {
+    cereal::BinaryInputArchive iarchive(ss);
+    iarchive(my_instance);
+  }
+  Rcout << my_instance.x << "," << my_instance.y << "," << my_instance.z << std::endl;
+}
+```
+
+``` r
+raw_vector <- serialize_myclass(1, 2, 4)
+str(raw_vector)
+deserialize_myclass(raw_vector)
+```
 
 ### Fast Classification Revisited
 
-#### Training
+#### Training (Serialization)
 
-#### Prediction
+Unfortunately, it seems there's a typo in **naive\_bayes\_classifier\_impl.hpp**:
+
+``` cpp
+template<typename MatType>
+template<typename Archive>
+void NaiveBayesClassifier<MatType>::Serialize(Archive& ar,
+                                              const unsigned int /* version */)
+{
+  ar & data::CreateNVP(means, "means");
+  ar & data::CreateNVP(variances, "variances");
+  ar & data::CreateNVP(probabilities, "probabilities");
+}
+```
+
+and in **naive\_bayes\_classifier.hpp**:
+
+``` cpp
+//! Serialize the classifier.
+template<typename Archive>
+void Serialize(Archive& ar, const unsigned int /* version */);
+```
+
+Namely, that `version` is commented out, meaning that `int` is now seen as a `const unsigned` variable name. IDK, maybe that actually means something, though??? So we have to use what *cereal* refers to as external serialization functions (see [Types of Serialization Functions](http://uscilab.github.io/cereal/serialization_functions.html#types-of-serialization-functions) documentation).
+
+``` cpp
+// [[Rcpp::plugins(mlpack11)]]
+// [[Rcpp::depends(RcppArmadillo)]]
+
+#include <RcppArmadillo.h>
+using namespace Rcpp;
+
+#include <mlpack/core/util/log.hpp>
+#include <mlpack/methods/naive_bayes/naive_bayes_classifier.hpp>
+using namespace mlpack::naive_bayes;
+
+// Serialization:
+#define CEREAL_SERIALIZE_FUNCTION_NAME Serialize
+// [[Rcpp::depends(Rcereal)]]
+#include <sstream>
+#include <cereal/archives/binary.hpp>
+// #include <mlpack/core/data/serialization_shim.hpp>
+
+// [[Rcpp::export]]
+RawVector nbTrain(const arma::mat& training_data, const arma::Row<size_t>& labels, const size_t& classes) {
+  // Initialization & training:
+  NaiveBayesClassifier<> nbc(training_data, labels, classes);
+  // Serialize:
+  std::stringstream ss;
+  {
+    cereal::BinaryOutputArchive oarchive(ss); // Create an output archive
+    nbc.Serialize(oarchive);
+    // oarchive(nbc);
+  }
+  ss.seekg(0, ss.end);
+  RawVector retval(ss.tellg());
+  ss.seekg(0, ss.beg);
+  ss.read(reinterpret_cast<char*>(&retval[0]), retval.size());
+  return retval;
+}
+```
+
+``` r
+fit <- nbTrain(ttraining_x, ttraining_y, classes)
+str(fit)
+```
+
+#### Prediction (Deserialization)
+
+...
+
+``` cpp
+// [[Rcpp::export]]
+NumericVector nbClassify(RawVector src) {
+  ...
+}
+```
+
+``` r
+fit_e1071 <- e1071::naiveBayes(training_x, training_y)
+# Performance Comparison
+microbenchmark(
+  `e1071 prediction` = e1071:::predict.naiveBayes(fit_e1071, testing_x, type = "class"),
+  `MLPACK prediction` = nbClassify(fit, ttesting_x)
+) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
+```
 
 References
 ==========
