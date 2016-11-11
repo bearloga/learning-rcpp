@@ -88,6 +88,7 @@ See [this section](http://rmarkdown.rstudio.com/authoring_knitr_engines.html#rcp
 
 ```{r load_pkg}
 library(magrittr)
+library(BH)
 library(Rcpp)
 library(RcppArmadillo)
 library(Rcereal)
@@ -196,7 +197,7 @@ using namespace mlpack::kmeans;
 using namespace arma;
 
 // [[Rcpp::export]]
-NumericVector fastKm(const arma::mat& data, const size_t& clusters) {
+NumericVector mlpackKM(const arma::mat& data, const size_t& clusters) {
   Row<size_t> assignments;
   KMeans<> k;
   k.Cluster(data, clusters, assignments);
@@ -213,13 +214,16 @@ NumericVector fastKm(const arma::mat& data, const size_t& clusters) {
 
 ```{r kmeans_example, dependson = 'kmeans_source', cache = TRUE}
 data(trees, package = "datasets"); data(faithful, package = "datasets")
+# kmeans coerces data frames to matrix, so it's worth doing that beforehand
+mtrees <- as.matrix(trees)
+mfaithful <- as.matrix(faithful)
 # KMeans in MLPACK requires observations to be in columns, not rows:
 ttrees <- t(trees); tfaithful <- t(faithful)
 microbenchmark(
-  kmeans_trees = kmeans(trees, 3),
-  fastKm_trees = fastKm(ttrees, 3),
-  kmeans_faithful = kmeans(faithful, 2),
-  fastKm_faithful = fastKm(tfaithful, 2)
+  kmeans_trees = kmeans(mtrees, 3),
+  mlpackKM_trees = mlpackKM(ttrees, 3),
+  kmeans_faithful = kmeans(mfaithful, 2),
+  mlpackKM_faithful = mlpackKM(tfaithful, 2)
 ) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
 ```
 
@@ -239,7 +243,7 @@ using namespace Rcpp;
 using namespace mlpack::naive_bayes;
 
 // [[Rcpp::export]]
-NumericVector fastNBC(const arma::mat& training_data, const arma::Row<size_t>& labels, const size_t& classes, const arma::mat& new_data) {
+NumericVector mlpackNBC(const arma::mat& training_data, const arma::Row<size_t>& labels, const size_t& classes, const arma::mat& new_data) {
   // Initialization & training:
   NaiveBayesClassifier<> nbc(training_data, labels, classes);
   // Prediction:
@@ -256,7 +260,7 @@ NumericVector fastNBC(const arma::mat& training_data, const arma::Row<size_t>& l
 
 For the classification example, we'll use the Iris dataset. (Of course.)
 
-```{r nbc_data, cache = TRUE}
+```{r iris, cache = TRUE}
 data(iris, package = "datasets")
 set.seed(0)
 training_idx <- sample.int(nrow(iris), 0.8 * nrow(iris), replace = FALSE)
@@ -288,7 +292,7 @@ for (size_t j = 0; j < data.n_cols; ++j)
 
 Hence why we run into a problem when we use `as.numeric(training_y)` in R and turn that factor into 1s, 2s, and 3s. This makes sense in retrospect but would have been nice to explicitly know that MLPACK expects training data class labels to be 0-based.
 
-```{r nbc_example, dependson = 'nbc_source', cache = TRUE}
+```{r nbc_example, dependson = c('nbc_source', 'iris'), cache = TRUE}
 # Naive Bayes via e1071
 naive_bayes <- e1071::naiveBayes(training_x, training_y)
 predictions <- e1071:::predict.naiveBayes(naive_bayes, testing_x, type = "class")
@@ -300,7 +304,7 @@ confusion_matrix$table
 print(confusion_matrix$overall["Accuracy"])
 
 # Naive Bayes via MLPACK
-predictions <- fastNBC(ttraining_x, ttraining_y, classes, ttesting_x)
+predictions <- mlpackNBC(ttraining_x, ttraining_y, classes, ttesting_x)
 confusion_matrix <- caret::confusionMatrix(
   data = predictions,
   reference = ttesting_y
@@ -314,7 +318,7 @@ microbenchmark(
     naive_bayes <- e1071::naiveBayes(training_x, training_y)
     predictions <- e1071:::predict.naiveBayes(naive_bayes, testing_x, type = "class")
   },
-  fastNBC = fastNBC(ttraining_x, ttraining_y, classes, ttesting_x)
+  fastNBC = mlpackNBC(ttraining_x, ttraining_y, classes, ttesting_x)
 ) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
 ```
 
@@ -338,7 +342,7 @@ using namespace Rcpp;
 using namespace mlpack::naive_bayes;
 
 // [[Rcpp::export]]
-SEXP nbTrainXPtr(const arma::mat& training_data, const arma::Row<size_t>& labels, const size_t& classes) {
+SEXP mlpackNBTrainXPtr(const arma::mat& training_data, const arma::Row<size_t>& labels, const size_t& classes) {
   // Initialization & training:
   NaiveBayesClassifier<>* nbc = new NaiveBayesClassifier<>(training_data, labels, classes);
   Rcpp::XPtr<NaiveBayesClassifier<>> p(nbc, true);
@@ -347,7 +351,7 @@ SEXP nbTrainXPtr(const arma::mat& training_data, const arma::Row<size_t>& labels
 ```
 
 ```{r nbc_example_2a, dependson = 'nbc_example', cache = FALSE}
-fit <- nbTrainXPtr(ttraining_x, ttraining_y, classes)
+fit <- mlpackNBTrainXPtr(ttraining_x, ttraining_y, classes)
 str(fit)
 ```
 
@@ -365,7 +369,7 @@ using namespace Rcpp;
 using namespace mlpack::naive_bayes;
 
 // [[Rcpp::export]]
-NumericVector nbClassifyXPtr(SEXP xp, const arma::mat& new_data) {
+NumericVector mlpackNBClassifyXPtr(SEXP xp, const arma::mat& new_data) {
   XPtr<NaiveBayesClassifier<>> nbc(xp);
   // Prediction:
   arma::Row<size_t> predictions;
@@ -384,78 +388,70 @@ fit_e1071 <- e1071::naiveBayes(training_x, training_y)
 # Performance Comparison
 microbenchmark(
   `e1071 prediction` = e1071:::predict.naiveBayes(fit_e1071, testing_x, type = "class"),
-  `MLPACK prediction` = nbClassifyXPtr(fit, ttesting_x)
+  `MLPACK prediction` = mlpackNBClassifyXPtr(fit, ttesting_x)
 ) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
 ```
 
 See [Exposing C++ functions and classes with Rcpp modules](http://dirk.eddelbuettel.com/code/rcpp/Rcpp-modules.pdf) for more information.
 
-## Object Serialization
+## Other Libraries
 
-## Example
+### Shark
 
-Taking the GPS example from Boost documentation's [tutorial on serialization](http://www.boost.org/doc/libs/1_62_0/libs/serialization/doc/tutorial.html), using some of the code from [Rcereal's README](https://github.com/wush978/Rcereal/blob/master/README.md#getting-started).
+For this one, I'm putting my work/notes into the [LearningRcppShark](LearningRcppShark/) package, which is how I'm learning the [Shark library](http://image.diku.dk/shark/), creating R bindings to it via RcppShark, and learning how to make an R package that makes use of an Rcpp-based library wrapper.
 
-```{Rcpp serialization, eval = FALSE}
-// [[Rcpp::plugins(cpp11)]]
+```{r RcppShark}
+# devtools::install_github("bearloga/learning-rcpp/LearningRcppShark")
+library(LearningRcppShark)
+```
+
+```{r RcppShark_example, dependson = 'iris', cache = TRUE}
+fit <- shark_kmeans(training_x, 3)
+predictions <- predict(fit, testing_x)
+```
+
+```{r RcppShark_benchmark, dependson = 'kmeans_example', cache = TRUE}
+# This version does not check if x is a numeric matrix
+sharkKM <- function(x, k) {
+  return(LearningRcppShark:::SharkKMeansTrain(x, k))
+}
+
+microbenchmark(
+  kmeans_trees = kmeans(mtrees, 3),
+  mlpackKM_trees = mlpackKM(ttrees, 3),
+  shark_km_trees = shark_kmeans(mtrees, 3),
+  sharkKM_trees = sharkKM(mtrees, 3),
+  kmeans_faithful = kmeans(mfaithful, 2),
+  mlpackKM_faithful = mlpackKM(tfaithful, 2),
+  shark_km_faithful = shark_kmeans(mfaithful, 2),
+  sharkKM_faithful = sharkKM(mfaithful, 2)
+) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
+```
+
+#### Classification
+
+### DLib
+
+```{r dlib11, cache = FALSE}
+registerPlugin("dlib11", function() {
+  return(list(env = list(
+    USE_CXX1X = "yes",
+    CXX1XSTD="-std=c++11",
+    PKG_LIBS = "-ldlib"
+  )))
+})
+```
+
+```{Rcpp, eval = FALSE}
+// [[Rcpp::plugins(dlib11)]]
 #include <Rcpp.h>
 using namespace Rcpp;
 
-// [[Rcpp::depends(BH)]]
-#include <boost/archive/binary_oarchive.hpp>
-
-class gps_position
-{
-public:
-    int degrees;
-    int minutes;
-    float seconds;
-    gps_position(){};
-    gps_position(int d, int m, float s) :
-        degrees(d), minutes(m), seconds(s)
-    {}
-};
-
-namespace boost {
-  namespace serialization {
-  
-    template<class Archive>
-    void serialize(Archive & ar, gps_position & g, const unsigned int version)
-    {
-        ar & g.degrees;
-        ar & g.minutes;
-        ar & g.seconds;
-    }
-  
-  } // namespace serialization
-} // namespace boost
-
-// [[Rcpp::export]]
-RawVector serializeGPS(int d, int m, float s) {
-  gps_position g(d, m, s);
-  std::stringstream ss;
-  {
-    boost::archive::binary_oarchive oa(ss);
-    oa << g;
-  }
-  ss.seekg(0, ss.end);
-  RawVector retval(ss.tellg());
-  ss.seekg(0, ss.beg);
-  ss.read(reinterpret_cast<char*>(&retval[0]), retval.size());
-  return retval;
-}
+#include <shark/Algorithms/KMeans.h> // k-means algorithm
+#include <shark/Models/Clustering/HardClusteringModel.h>// model performing hard clustering of points
 ```
 
-```{r, eval = FALSE}
-serializeGPS(35L, 52L, 0.3)
-```
-
-```
-*** caught segfault ***
-address 0x0, cause 'unknown'
-```
-
-AWESOME.
+## Object Serialization
 
 ```{Rcpp cerealization, cache = TRUE, eval = FALSE}
 // [[Rcpp::plugins(cpp11)]]
@@ -525,91 +521,7 @@ deserialize_myclass(raw_vector)
 
 #### Training (Serialization)
 
-Unfortunately, it seems there's a typo in **naive_bayes_classifier_impl.hpp**:
-
-```cpp
-template<typename MatType>
-template<typename Archive>
-void NaiveBayesClassifier<MatType>::Serialize(Archive& ar,
-                                              const unsigned int /* version */)
-{
-  ar & data::CreateNVP(means, "means");
-  ar & data::CreateNVP(variances, "variances");
-  ar & data::CreateNVP(probabilities, "probabilities");
-}
-```
-
-and in **naive_bayes_classifier.hpp**:
-
-```cpp
-//! Serialize the classifier.
-template<typename Archive>
-void Serialize(Archive& ar, const unsigned int /* version */);
-```
-
-Namely, that `version` is commented out, meaning that `int` is now seen as a `const unsigned` variable name. IDK, maybe that actually means something, though??? So we have to use what *cereal* refers to as external serialization functions (see [Types of Serialization Functions](http://uscilab.github.io/cereal/serialization_functions.html#types-of-serialization-functions) documentation).
-
-```{Rcpp nbc_serialization_source, cache = TRUE, eval = FALSE}
-// [[Rcpp::plugins(mlpack11)]]
-// [[Rcpp::depends(RcppArmadillo)]]
-
-#include <RcppArmadillo.h>
-using namespace Rcpp;
-
-#include <mlpack/core/util/log.hpp>
-#include <mlpack/methods/naive_bayes/naive_bayes_classifier.hpp>
-using namespace mlpack::naive_bayes;
-
-// Serialization:
-#define CEREAL_SERIALIZE_FUNCTION_NAME Serialize
-// [[Rcpp::depends(Rcereal)]]
-#include <sstream>
-#include <cereal/archives/binary.hpp>
-// #include <mlpack/core/data/serialization_shim.hpp>
-
-// [[Rcpp::export]]
-RawVector nbTrain(const arma::mat& training_data, const arma::Row<size_t>& labels, const size_t& classes) {
-  // Initialization & training:
-  NaiveBayesClassifier<> nbc(training_data, labels, classes);
-  // Serialize:
-  std::stringstream ss;
-  {
-    cereal::BinaryOutputArchive oarchive(ss); // Create an output archive
-    nbc.Serialize(oarchive);
-    // oarchive(nbc);
-  }
-  ss.seekg(0, ss.end);
-  RawVector retval(ss.tellg());
-  ss.seekg(0, ss.beg);
-  ss.read(reinterpret_cast<char*>(&retval[0]), retval.size());
-  return retval;
-}
-```
-
-```{r nbc_serialization_example, dependson = 'nbc_serialization_source', cache = TRUE, eval = FALSE}
-fit <- nbTrain(ttraining_x, ttraining_y, classes)
-str(fit)
-```
-
 #### Prediction (Deserialization)
-
-...
-
-```{Rcpp nbc_deserialization_source, cache = TRUE, eval = FALSE}
-// [[Rcpp::export]]
-NumericVector nbClassify(RawVector src) {
-  ...
-}
-```
-
-```{r nbc_deserialization_example, dependson = c('nbc_serialization_example', 'nbc_deserialization_source'), cache = TRUE, eval = FALSE}
-fit_e1071 <- e1071::naiveBayes(training_x, training_y)
-# Performance Comparison
-microbenchmark(
-  `e1071 prediction` = e1071:::predict.naiveBayes(fit_e1071, testing_x, type = "class"),
-  `MLPACK prediction` = nbClassify(fit, ttesting_x)
-) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
-```
 
 # References
 

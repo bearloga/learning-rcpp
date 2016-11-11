@@ -1,0 +1,15 @@
+Package: LearningRcppShark
+Type: Package
+Title: R Bindings To Shark ML Algorithms
+Version: 0.0.1.9000
+Date: 2016-11-10
+Author: Mikhail Popov
+Maintainer: Mikhail Popov <mikhail@mpopov.com>
+Description: This is my attempt to learn Shark C++ machine learning library
+    via the RcppShark package.
+Imports: Rcpp (>= 0.12.7),
+    checkmate
+LinkingTo: Rcpp,
+    RcppShark,
+    BH
+RoxygenNote: 5.0.1

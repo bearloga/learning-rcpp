@@ -1,0 +1,3 @@
+USE_CXX1X=yes
+CXX_STD=CXX11
+PKG_LIBS = $(shell "${R_HOME}/bin${R_ARCH_BIN}/Rscript.exe" -e "RcppShark:::LdFlags()") $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
