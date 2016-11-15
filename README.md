@@ -17,10 +17,9 @@ My main goal in this educational endeavor is to be able to use the [MLPACK](http
         -   [Shark](#shark)
             -   [Classification](#classification)
         -   [DLib](#dlib)
-    -   [Object Serialization](#object-serialization)
+    -   [Random Number Generation](#random-number-generation)
+    -   [Serialization](#serialization)
         -   [Fast Classification Revisited](#fast-classification-revisited)
-            -   [Training (Serialization)](#training-serialization)
-            -   [Prediction (Deserialization)](#prediction-deserialization)
 -   [References](#references)
 
 Setup
@@ -84,7 +83,8 @@ install.packages(c(
   "microbenchmark", # For benchmarking performance
   "devtools", # For installing packages from GitHub
   "magrittr", # For piping
-  "knitr" # For printing tables & data.frames as Markdown
+  "knitr", # For printing tables & data.frames as Markdown
+  "toOrdinal" # Cardinal to ordinal number conversion function (e.g. 1 => "1st")
 ), repos = "https://cran.rstudio.com/")
 devtools::install_github("yihui/printr") # Prettier table printing
 ```
@@ -151,9 +151,9 @@ microbenchmark(
 
 | expr   |     min|      lq|    mean|  median|      uq|     max|  neval|
 |:-------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| native |  0.0026|  0.0033|  0.0057|  0.0045|  0.0064|  0.0375|    100|
-| loop   |  0.8924|  1.1060|  1.5682|  1.2689|  1.7722|  6.0524|    100|
-| Rcpp   |  0.0047|  0.0071|  0.0154|  0.0126|  0.0171|  0.1171|    100|
+| native |  0.0025|  0.0028|  0.0047|  0.0037|  0.0049|  0.0456|    100|
+| loop   |  0.8798|  0.9639|  1.2831|  1.0744|  1.5010|  2.7643|    100|
+| Rcpp   |  0.0044|  0.0060|  0.0105|  0.0100|  0.0122|  0.0331|    100|
 
 Using Libraries
 ---------------
@@ -189,11 +189,11 @@ microbenchmark(
 ) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
 ```
 
-| expr    |     min|      lq|    mean|  median|      uq|    max|  neval|
-|:--------|-------:|-------:|-------:|-------:|-------:|------:|------:|
-| lm      |  0.8616|  1.0288|  1.6195|  1.3594|  1.9909|  4.793|    100|
-| fastLm  |  0.0936|  0.1216|  0.2150|  0.1608|  0.2310|  1.236|    100|
-| RcppArm |  0.1195|  0.1502|  0.2574|  0.2063|  0.3216|  1.640|    100|
+| expr    |     min|      lq|    mean|  median|      uq|     max|  neval|
+|:--------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
+| lm      |  0.8476|  0.9612|  1.4189|  1.2675|  1.6239|  3.7993|    100|
+| fastLm  |  0.0940|  0.1118|  0.1667|  0.1507|  0.2092|  0.3982|    100|
+| RcppArm |  0.1186|  0.1448|  0.2131|  0.1753|  0.2316|  0.8633|    100|
 
 ### Fast K-Means
 
@@ -258,12 +258,12 @@ microbenchmark(
 ) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
 ```
 
-| expr               |     min|      lq|    mean|  median|      uq|      max|  neval|
-|:-------------------|-------:|-------:|-------:|-------:|-------:|--------:|------:|
-| kmeans\_trees      |  0.1862|  0.2095|  0.4912|  0.2663|  0.4899|   8.0418|    100|
-| mlpackKM\_trees    |  0.0175|  0.0367|  0.0636|  0.0508|  0.0809|   0.2474|    100|
-| kmeans\_faithful   |  0.1981|  0.2198|  0.4983|  0.2993|  0.5202|  10.1142|    100|
-| mlpackKM\_faithful |  0.0793|  0.1258|  0.2050|  0.1462|  0.2576|   1.3892|    100|
+| expr               |     min|      lq|    mean|  median|      uq|     max|  neval|
+|:-------------------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
+| kmeans\_trees      |  0.1877|  0.2097|  0.2585|  0.2211|  0.2650|  1.2238|    100|
+| mlpackKM\_trees    |  0.0197|  0.0306|  0.0422|  0.0396|  0.0512|  0.0971|    100|
+| kmeans\_faithful   |  0.2026|  0.2283|  0.2842|  0.2433|  0.2745|  2.6580|    100|
+| mlpackKM\_faithful |  0.0840|  0.1261|  0.1489|  0.1377|  0.1495|  0.6221|    100|
 
 Fast Classification
 -------------------
@@ -391,8 +391,8 @@ microbenchmark(
 
 | expr       |     min|      lq|    mean|  median|      uq|      max|  neval|
 |:-----------|-------:|-------:|-------:|-------:|-------:|--------:|------:|
-| naiveBayes |  4.5083|  4.9263|  5.7663|  5.3907|  6.1432|  10.3640|    100|
-| fastNBC    |  0.0149|  0.0173|  0.0336|  0.0369|  0.0422|   0.1244|    100|
+| naiveBayes |  4.4224|  4.8786|  5.9572|  5.2794|  6.9049|  12.0678|    100|
+| fastNBC    |  0.0152|  0.0177|  0.0346|  0.0381|  0.0425|   0.0911|    100|
 
 ### External Pointers
 
@@ -466,10 +466,10 @@ microbenchmark(
 ) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
 ```
 
-| expr              |     min|      lq|    mean|  median|     uq|     max|  neval|
-|:------------------|-------:|-------:|-------:|-------:|------:|-------:|------:|
-| e1071 prediction  |  3.5286|  3.8864|  4.6389|  4.4660|  5.000|  8.0984|    100|
-| MLPACK prediction |  0.0093|  0.0112|  0.0257|  0.0265|  0.035|  0.0854|    100|
+| expr              |     min|      lq|    mean|  median|      uq|     max|  neval|
+|:------------------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
+| e1071 prediction  |  3.5328|  3.8484|  4.5833|  4.2302|  4.9111|  8.8710|    100|
+| MLPACK prediction |  0.0093|  0.0112|  0.0261|  0.0271|  0.0349|  0.0798|    100|
 
 See [Exposing C++ functions and classes with Rcpp modules](http://dirk.eddelbuettel.com/code/rcpp/Rcpp-modules.pdf) for more information.
 
@@ -510,77 +510,220 @@ microbenchmark(
 
 | expr                |     min|      lq|    mean|  median|      uq|      max|  neval|
 |:--------------------|-------:|-------:|-------:|-------:|-------:|--------:|------:|
-| kmeans\_trees       |  0.1963|  0.2252|  0.3561|  0.2765|  0.3858|   2.1254|    100|
-| mlpackKM\_trees     |  0.0229|  0.0369|  0.0582|  0.0478|  0.0686|   0.2531|    100|
-| shark\_km\_trees    |  0.1015|  0.1284|  0.1987|  0.1536|  0.2299|   0.7095|    100|
-| sharkKM\_trees      |  0.0658|  0.0871|  0.1253|  0.1020|  0.1322|   0.5512|    100|
-| kmeans\_faithful    |  0.2109|  0.2455|  0.3604|  0.3010|  0.4372|   0.8352|    100|
-| mlpackKM\_faithful  |  0.0787|  0.1241|  0.1549|  0.1406|  0.1624|   0.3529|    100|
-| shark\_km\_faithful |  0.2831|  0.3367|  0.6385|  0.3690|  0.5502|  12.1438|    100|
-| sharkKM\_faithful   |  0.2576|  0.2949|  0.3952|  0.3198|  0.4443|   1.1611|    100|
+| kmeans\_trees       |  0.1962|  0.2296|  0.3010|  0.2571|  0.3426|   0.6473|    100|
+| mlpackKM\_trees     |  0.0221|  0.0360|  0.0517|  0.0444|  0.0590|   0.1875|    100|
+| shark\_km\_trees    |  0.1020|  0.1293|  0.1756|  0.1473|  0.2036|   0.4582|    100|
+| sharkKM\_trees      |  0.0696|  0.0918|  0.1318|  0.1136|  0.1510|   0.5711|    100|
+| kmeans\_faithful    |  0.2009|  0.2406|  0.3303|  0.2769|  0.3950|   0.7896|    100|
+| mlpackKM\_faithful  |  0.0787|  0.1252|  0.1623|  0.1386|  0.1682|   0.4784|    100|
+| shark\_km\_faithful |  0.2908|  0.3333|  0.8599|  0.3668|  0.4674|  43.5087|    100|
+| sharkKM\_faithful   |  0.2546|  0.2886|  0.3652|  0.3196|  0.3922|   0.7748|    100|
 
 #### Classification
 
 ### DLib
 
 ``` r
-registerPlugin("dlib11", function() {
+registerPlugin("dlib", function() {
   return(list(env = list(
-    USE_CXX1X = "yes",
-    CXX1XSTD="-std=c++11",
     PKG_LIBS = "-ldlib"
   )))
 })
 ```
 
 ``` cpp
-// [[Rcpp::plugins(dlib11)]]
+// [[Rcpp::plugins(dlib)]]
+#include <Rcpp.h>
+using namespace Rcpp;
+```
+
+...
+
+Random Number Generation
+------------------------
+
+[Rcpp sugar](http://adv-r.had.co.nz/Rcpp.html#rcpp-sugar) provides a bunch of useful features and high-level abstractions, such as statistical distribution functions. Let's create a function that yields a sample of *n* independent draws from Bernoulli(*p*):
+
+``` cpp
 #include <Rcpp.h>
 using namespace Rcpp;
 
-#include <shark/Algorithms/KMeans.h> // k-means algorithm
-#include <shark/Models/Clustering/HardClusteringModel.h>// model performing hard clustering of points
+// [[Rcpp::export]]
+NumericVector bernie(const int& n, const float& p) {
+  return rbinom(n, 1, p);
+}
 ```
 
-Object Serialization
---------------------
+> Section 6.3 of [Writing R Extensions](http://cran.r-project.org/doc/manuals/r-release/R-exts.html#Random-number-generation) describes an additional requirement for calling the R random number generation functions: you must call GetRNGState prior to using them and then PutRNGState afterwards. These functions (respectively) read .Random.seed and then write it out after use. When using Rcpp attributes (as we do via the // \[\[Rcpp::export\]\] annotation on the functions above) it is not necessary to call GetRNGState and PutRNGState because this is done automatically within the wrapper code generated for exported functions. In fact, since these calls don’t nest it is actually an error to call them when within a function exported via Rcpp attributes. ([Random number generation](http://gallery.rcpp.org/articles/random-number-generation/))
+
+Let's just do a quick test to see if setting seed does what it should:
+
+``` r
+n <- 100; p <- 0.5; x <- list()
+set.seed(0); x[[1]] <- bernie(n, p)
+set.seed(0); x[[2]] <- bernie(n, p)
+set.seed(42); x[[3]] <- bernie(n, p)
+set.seed(42); x[[4]] <- bernie(n, p)
+```
+
+<table>
+<colgroup>
+<col width="20%" />
+<col width="19%" />
+<col width="19%" />
+<col width="20%" />
+<col width="20%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left"></th>
+<th align="left">Seed: 0, 1st draw</th>
+<th align="left">Seed: 0, 2nd draw</th>
+<th align="left">Seed: 42, 1st draw</th>
+<th align="left">Seed: 42, 2nd draw</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Seed: 0, 1st draw</td>
+<td align="left">All draws match</td>
+<td align="left">All draws match</td>
+<td align="left">Draws don't match</td>
+<td align="left">Draws don't match</td>
+</tr>
+<tr class="even">
+<td align="left">Seed: 0, 2nd draw</td>
+<td align="left">All draws match</td>
+<td align="left">All draws match</td>
+<td align="left">Draws don't match</td>
+<td align="left">Draws don't match</td>
+</tr>
+<tr class="odd">
+<td align="left">Seed: 42, 1st draw</td>
+<td align="left">Draws don't match</td>
+<td align="left">Draws don't match</td>
+<td align="left">All draws match</td>
+<td align="left">All draws match</td>
+</tr>
+<tr class="even">
+<td align="left">Seed: 42, 2nd draw</td>
+<td align="left">Draws don't match</td>
+<td align="left">Draws don't match</td>
+<td align="left">All draws match</td>
+<td align="left">All draws match</td>
+</tr>
+</tbody>
+</table>
+
+Let's see how the performance differs between it and an R-equivalent when *n*=1,000:
+
+``` r
+rbern <- function(n, p) {
+  return(rbinom(n, 1, p))
+}
+microbenchmark(
+  R = rbern(1e3, 0.49),
+  Rcpp = bernie(1e3, 0.49)
+) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
+```
+
+| expr |     min|      lq|    mean|  median|      uq|     max|  neval|
+|:-----|-------:|-------:|-------:|-------:|-------:|-------:|------:|
+| R    |  0.0484|  0.0497|  0.0586|  0.0503|  0.0616|  0.1250|    100|
+| Rcpp |  0.0288|  0.0299|  0.0384|  0.0306|  0.0447|  0.1335|    100|
+
+Serialization
+-------------
+
+[Serialization](https://en.wikipedia.org/wiki/Serialization) is the process of translating data structures and objects into a format that can be stored. Earlier, we trained a Naive Bayes classifier and kept the trained object in memory, returning an external pointer to it, allowing us to classify new observations as long as it is done within the same session.
+
+This one requires: C++11 capability (if compiled supports it, enable via `// [[Rcpp::plugins(cpp11)]]`) and [cereal](http://uscilab.github.io/cereal/) serialization library, available via [Rcereal package](https://cran.r-project.org/package=Rcereal).
+
+Roughly, we're going to create a serializable NumericMatrix (more or less).
 
 ``` cpp
 // [[Rcpp::plugins(cpp11)]]
-
-/* The serialization/deserialization function name to search for.
-   You can define CEREAL_SERIALIZE_FUNCTION_NAME to be different,
-   assuming you do so before <cereal/macros.hpp> is included. */
-#define CEREAL_SERIALIZE_FUNCTION_NAME Serialize
 // [[Rcpp::depends(Rcereal)]]
 
+// Enables us to keep serialization method internally:
+#include <cereal/access.hpp>
+// see http://uscilab.github.io/cereal/serialization_functions.html#non-public-serialization
+
+// Use std::vector and make it serializable:
+#include <vector>
+#include <cereal/types/vector.hpp>
+// see http://uscilab.github.io/cereal/stl_support.html for more info
+
+// Cereal's binary archiving:
 #include <sstream>
 #include <cereal/archives/binary.hpp>
+// see http://uscilab.github.io/cereal/serialization_archives.html
+// and http://uscilab.github.io/cereal/quickstart.html for more info
+
 #include <Rcpp.h>
+using namespace Rcpp;
 
-struct MyClass
+class MyClass
 {
-  int x, y, z;
-
+private:
+  int Data_rows;
+  int Data_cols;
+  std::vector<double> Data;
+  friend class cereal::access;
   // This method lets cereal know which data members to serialize
   template<class Archive>
-  void Serialize(Archive& archive)
+  void serialize(Archive& ar)
   {
-    archive( x, y, z ); // serialize things by passing them to the archive
+    ar( Data, Data_rows, Data_cols ); // serialize things by passing them to the archive
+  }
+public:
+  MyClass(){};
+  MyClass(NumericMatrix x) {
+    std::vector<double> y = as<std::vector<double>>(x); // Rcpp::as
+    Data = y;
+    Data_rows = x.nrow();
+    Data_cols = x.ncol();
+  };
+  NumericVector getNumericData() {
+    // Thanks to Kevin Ushey for the tip to use dim attribute
+    // http://stackoverflow.com/a/19866956/1091835
+    NumericVector d = wrap(Data);
+    d.attr("dim") = Dimension(Data_rows, Data_cols);
+    return d;
   }
 };
+```
 
-using namespace Rcpp;
-//[[Rcpp::export]]
-RawVector serialize_myclass(int x = 1, int y = 2, int z = 3) {
-  MyClass my_instance;
-  my_instance.x = x;
-  my_instance.y = y;
-  my_instance.z = z;
+Let's just test that everything works before adding \[de-\]serialization capabilities.
+
+``` cpp
+// [[Rcpp::export]]
+NumericVector testMC(NumericMatrix x) {
+  MyClass mc(x);
+  return mc.getNumericData();
+}
+```
+
+``` r
+x <- matrix(0:9, nrow = 2, ncol = 5)
+(y <- testMC(x))
+```
+
+|     |     |     |     |     |
+|----:|----:|----:|----:|----:|
+|    0|    2|    4|    6|    8|
+|    1|    3|    5|    7|    9|
+
+Yay! Okay, for this we are going to use the serialization/deserialization example from [Rcereal README.md](https://github.com/wush978/Rcereal/blob/master/README.md).
+
+``` cpp
+// [[Rcpp::export]]
+RawVector serializeMC(NumericMatrix x) {
+  MyClass mc(x);
   std::stringstream ss;
   {
     cereal::BinaryOutputArchive oarchive(ss); // Create an output archive
-    oarchive(my_instance);
+    oarchive(mc);
   }
   ss.seekg(0, ss.end);
   RawVector retval(ss.tellg());
@@ -588,32 +731,61 @@ RawVector serialize_myclass(int x = 1, int y = 2, int z = 3) {
   ss.read(reinterpret_cast<char*>(&retval[0]), retval.size());
   return retval;
 }
+```
 
+``` cpp
 //[[Rcpp::export]]
-void deserialize_myclass(RawVector src) {
+NumericVector deserializeMC(RawVector src) {
   std::stringstream ss;
   ss.write(reinterpret_cast<char*>(&src[0]), src.size());
   ss.seekg(0, ss.beg);
-  MyClass my_instance;
+  MyClass mc;
   {
     cereal::BinaryInputArchive iarchive(ss);
-    iarchive(my_instance);
+    iarchive(mc);
   }
-  Rcout << my_instance.x << "," << my_instance.y << "," << my_instance.z << std::endl;
+  return mc.getNumericData();
 }
 ```
 
 ``` r
-raw_vector <- serialize_myclass(1, 2, 4)
-str(raw_vector)
-deserialize_myclass(raw_vector)
+(raw_vector <- serializeMC(x))
 ```
+
+    ##  [1] 0a 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 f0
+    ## [24] 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 00 00 00 00 00 00
+    ## [47] 10 40 00 00 00 00 00 00 14 40 00 00 00 00 00 00 18 40 00 00 00 00 00
+    ## [70] 00 1c 40 00 00 00 00 00 00 20 40 00 00 00 00 00 00 22 40 02 00 00 00
+    ## [93] 05 00 00 00
+
+``` r
+deserializeMC(raw_vector)
+```
+
+|     |     |     |     |     |
+|----:|----:|----:|----:|----:|
+|    0|    2|    4|    6|    8|
+|    1|    3|    5|    7|    9|
 
 ### Fast Classification Revisited
 
-#### Training (Serialization)
+``` cpp
+// [[Rcpp::plugins(mlpack11)]]
+// [[Rcpp::depends(RcppArmadillo)]]
 
-#### Prediction (Deserialization)
+#include <RcppArmadillo.h>
+using namespace Rcpp;
+
+#include <mlpack/core/util/log.hpp>
+#include <mlpack/methods/naive_bayes/naive_bayes_classifier.hpp>
+using namespace mlpack::naive_bayes;
+
+// [[Rcpp::export]]
+NumericVector serialize_mlpackNBC(const arma::mat& training_data, const arma::Row<size_t>& labels, const size_t& classes) {
+  // Initialization & training:
+  NaiveBayesClassifier<> nbc(training_data, labels, classes);
+}
+```
 
 References
 ==========

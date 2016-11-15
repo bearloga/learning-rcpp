@@ -68,7 +68,8 @@ install.packages(c(
   "microbenchmark", # For benchmarking performance
   "devtools", # For installing packages from GitHub
   "magrittr", # For piping
-  "knitr" # For printing tables & data.frames as Markdown
+  "knitr", # For printing tables & data.frames as Markdown
+  "toOrdinal" # Cardinal to ordinal number conversion function (e.g. 1 => "1st")
 ), repos = "https://cran.rstudio.com/")
 devtools::install_github("yihui/printr") # Prettier table printing
 ```
@@ -432,63 +433,161 @@ microbenchmark(
 
 ### DLib
 
-```{r dlib11, cache = FALSE}
-registerPlugin("dlib11", function() {
+```{r dlib, cache = FALSE, eval = FALSE}
+registerPlugin("dlib", function() {
   return(list(env = list(
-    USE_CXX1X = "yes",
-    CXX1XSTD="-std=c++11",
     PKG_LIBS = "-ldlib"
   )))
 })
 ```
 
 ```{Rcpp, eval = FALSE}
-// [[Rcpp::plugins(dlib11)]]
+// [[Rcpp::plugins(dlib)]]
 #include <Rcpp.h>
 using namespace Rcpp;
-
-#include <shark/Algorithms/KMeans.h> // k-means algorithm
-#include <shark/Models/Clustering/HardClusteringModel.h>// model performing hard clustering of points
 ```
 
-## Object Serialization
+...
 
-```{Rcpp cerealization, cache = TRUE, eval = FALSE}
+## Random Number Generation
+
+[Rcpp sugar](http://adv-r.had.co.nz/Rcpp.html#rcpp-sugar) provides a bunch of useful features and high-level abstractions, such as statistical distribution functions. Let's create a function that yields a sample of _n_ independent draws from Bernoulli(*p*):
+
+```{Rcpp rng_source, cache = TRUE}
+#include <Rcpp.h>
+using namespace Rcpp;
+
+// [[Rcpp::export]]
+NumericVector bernie(const int& n, const float& p) {
+  return rbinom(n, 1, p);
+}
+```
+
+> Section 6.3 of [Writing R Extensions](http://cran.r-project.org/doc/manuals/r-release/R-exts.html#Random-number-generation) describes an additional requirement for calling the R random number generation functions: you must call GetRNGState prior to using them and then PutRNGState afterwards. These functions (respectively) read .Random.seed and then write it out after use. When using Rcpp attributes (as we do via the // [[Rcpp::export]] annotation on the functions above) it is not necessary to call GetRNGState and PutRNGState because this is done automatically within the wrapper code generated for exported functions. In fact, since these calls don’t nest it is actually an error to call them when within a function exported via Rcpp attributes. ([Random number generation](http://gallery.rcpp.org/articles/random-number-generation/))
+
+Let's just do a quick test to see if setting seed does what it should:
+
+```{r rng_example, dependson = 'rng_source', cache = TRUE}
+n <- 100; p <- 0.5; x <- list()
+set.seed(0); x[[1]] <- bernie(n, p)
+set.seed(0); x[[2]] <- bernie(n, p)
+set.seed(42); x[[3]] <- bernie(n, p)
+set.seed(42); x[[4]] <- bernie(n, p)
+```
+```{r rng_results, dependson = 'rng_example', cache = TRUE, results = 'asis', echo = FALSE}
+y <- matrix(logical(length(x)^2), nrow = length(x))
+for (i in seq_along(x)) {
+  y[i, ] <- vapply(x, function(y) {
+    return(all(x[[i]] == y))
+  }, TRUE)
+}
+rownames(y) <- colnames(y) <- paste0("Seed: ", c(rep(0, 2), rep(42, 2)), ", ", vapply(1:2, toOrdinal::toOrdinal, ""), " draw")
+y[y] <- "All draws match"
+y[y == "FALSE"] <- "Draws don't match"
+knitr::kable(y, format = "markdown")
+```
+
+Let's see how the performance differs between it and an R-equivalent when _n_=1,000:
+
+```{r rng_benchmark, dependson = 'rng_source', cache = TRUE}
+rbern <- function(n, p) {
+  return(rbinom(n, 1, p))
+}
+microbenchmark(
+  R = rbern(1e3, 0.49),
+  Rcpp = bernie(1e3, 0.49)
+) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
+```
+
+## Serialization
+
+[Serialization](https://en.wikipedia.org/wiki/Serialization) is the process of translating data structures and objects into a format that can be stored. Earlier, we trained a Naive Bayes classifier and kept the trained object in memory, returning an external pointer to it, allowing us to classify new observations as long as it is done within the same session.
+
+This one requires: C++11 capability (if compiled supports it, enable via `// [[Rcpp::plugins(cpp11)]]`) and [cereal](http://uscilab.github.io/cereal/) serialization library, available via [Rcereal package](https://cran.r-project.org/package=Rcereal).
+
+Roughly, we're going to create a serializable NumericMatrix (more or less).
+
+```{Rcpp cerealization, ref.label = c('myclass_definition', 'myclass_test', 'myclass_serialization', 'myclass_deserialization'), cache = TRUE, include = FALSE}
+```
+
+```{Rcpp myclass_definition, eval = FALSE}
 // [[Rcpp::plugins(cpp11)]]
-
-/* The serialization/deserialization function name to search for.
-   You can define CEREAL_SERIALIZE_FUNCTION_NAME to be different,
-   assuming you do so before <cereal/macros.hpp> is included. */
-#define CEREAL_SERIALIZE_FUNCTION_NAME Serialize
 // [[Rcpp::depends(Rcereal)]]
 
+// Enables us to keep serialization method internally:
+#include <cereal/access.hpp>
+// see http://uscilab.github.io/cereal/serialization_functions.html#non-public-serialization
+
+// Use std::vector and make it serializable:
+#include <vector>
+#include <cereal/types/vector.hpp>
+// see http://uscilab.github.io/cereal/stl_support.html for more info
+
+// Cereal's binary archiving:
 #include <sstream>
 #include <cereal/archives/binary.hpp>
+// see http://uscilab.github.io/cereal/serialization_archives.html
+// and http://uscilab.github.io/cereal/quickstart.html for more info
+
 #include <Rcpp.h>
+using namespace Rcpp;
 
-struct MyClass
+class MyClass
 {
-  int x, y, z;
-
+private:
+  int Data_rows;
+  int Data_cols;
+  std::vector<double> Data;
+  friend class cereal::access;
   // This method lets cereal know which data members to serialize
   template<class Archive>
-  void Serialize(Archive& archive)
+  void serialize(Archive& ar)
   {
-    archive( x, y, z ); // serialize things by passing them to the archive
+    ar( Data, Data_rows, Data_cols ); // serialize things by passing them to the archive
+  }
+public:
+  MyClass(){};
+  MyClass(NumericMatrix x) {
+    std::vector<double> y = as<std::vector<double>>(x); // Rcpp::as
+    Data = y;
+    Data_rows = x.nrow();
+    Data_cols = x.ncol();
+  };
+  NumericVector getNumericData() {
+    // Thanks to Kevin Ushey for the tip to use dim attribute
+    // http://stackoverflow.com/a/19866956/1091835
+    NumericVector d = wrap(Data);
+    d.attr("dim") = Dimension(Data_rows, Data_cols);
+    return d;
   }
 };
+```
 
-using namespace Rcpp;
-//[[Rcpp::export]]
-RawVector serialize_myclass(int x = 1, int y = 2, int z = 3) {
-  MyClass my_instance;
-  my_instance.x = x;
-  my_instance.y = y;
-  my_instance.z = z;
+Let's just test that everything works before adding [de-]serialization capabilities.
+
+```{Rcpp myclass_test, eval = FALSE}
+// [[Rcpp::export]]
+NumericVector testMC(NumericMatrix x) {
+  MyClass mc(x);
+  return mc.getNumericData();
+}
+```
+
+```{r myclass_example, dependson = 'cerealization', cache = TRUE}
+x <- matrix(0:9, nrow = 2, ncol = 5)
+(y <- testMC(x))
+```
+
+Yay! Okay, for this we are going to use the serialization/deserialization example from [Rcereal README.md](https://github.com/wush978/Rcereal/blob/master/README.md).
+
+```{Rcpp myclass_serialization, eval = FALSE}
+// [[Rcpp::export]]
+RawVector serializeMC(NumericMatrix x) {
+  MyClass mc(x);
   std::stringstream ss;
   {
     cereal::BinaryOutputArchive oarchive(ss); // Create an output archive
-    oarchive(my_instance);
+    oarchive(mc);
   }
   ss.seekg(0, ss.end);
   RawVector retval(ss.tellg());
@@ -496,32 +595,47 @@ RawVector serialize_myclass(int x = 1, int y = 2, int z = 3) {
   ss.read(reinterpret_cast<char*>(&retval[0]), retval.size());
   return retval;
 }
+```
 
+```{Rcpp myclass_deserialization, eval = FALSE}
 //[[Rcpp::export]]
-void deserialize_myclass(RawVector src) {
+NumericVector deserializeMC(RawVector src) {
   std::stringstream ss;
   ss.write(reinterpret_cast<char*>(&src[0]), src.size());
   ss.seekg(0, ss.beg);
-  MyClass my_instance;
+  MyClass mc;
   {
     cereal::BinaryInputArchive iarchive(ss);
-    iarchive(my_instance);
+    iarchive(mc);
   }
-  Rcout << my_instance.x << "," << my_instance.y << "," << my_instance.z << std::endl;
+  return mc.getNumericData();
 }
 ```
 
-```{r, eval = FALSE}
-raw_vector <- serialize_myclass(1, 2, 4)
-str(raw_vector)
-deserialize_myclass(raw_vector)
+```{r cerealization_example, dependson = c('myclass_example', 'cerealization'), cache = TRUE}
+(raw_vector <- serializeMC(x))
+deserializeMC(raw_vector)
 ```
 
 ### Fast Classification Revisited
 
-#### Training (Serialization)
+```{Rcpp serialized_nbc, eval = FALSE}
+// [[Rcpp::plugins(mlpack11)]]
+// [[Rcpp::depends(RcppArmadillo)]]
 
-#### Prediction (Deserialization)
+#include <RcppArmadillo.h>
+using namespace Rcpp;
+
+#include <mlpack/core/util/log.hpp>
+#include <mlpack/methods/naive_bayes/naive_bayes_classifier.hpp>
+using namespace mlpack::naive_bayes;
+
+// [[Rcpp::export]]
+NumericVector serialize_mlpackNBC(const arma::mat& training_data, const arma::Row<size_t>& labels, const size_t& classes) {
+  // Initialization & training:
+  NaiveBayesClassifier<> nbc(training_data, labels, classes);
+}
+```
 
 # References
 
