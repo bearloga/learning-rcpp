@@ -478,7 +478,7 @@ set.seed(42); x[[4]] <- bernie(n, p)
 y <- matrix(logical(length(x)^2), nrow = length(x))
 for (i in seq_along(x)) {
   y[i, ] <- vapply(x, function(y) {
-    return(all(x[[i]] == y))
+    return(identical(x[[i]], y))
   }, TRUE)
 }
 rownames(y) <- colnames(y) <- paste0("Seed: ", c(rep(0, 2), rep(42, 2)), ", ", vapply(1:2, toOrdinal::toOrdinal, ""), " draw")
@@ -505,9 +505,9 @@ microbenchmark(
 
 This one requires: C++11 capability (if compiled supports it, enable via `// [[Rcpp::plugins(cpp11)]]`) and [cereal](http://uscilab.github.io/cereal/) serialization library, available via [Rcereal package](https://cran.r-project.org/package=Rcereal).
 
-Roughly, we're going to create a serializable NumericMatrix (more or less).
+Roughly, we're going to create a wrapper for NumericMatrix that is serializable. **Note**: unlike previous section where the Rcpp chunks were complete, this section has multiple Rcpp chunks that are stitched together using the "ref.label" knitr chunk parameter, allowing me to have notes in-between different functions that should be together. See [Combining Chunks](http://rmarkdown.rstudio.com/authoring_knitr_engines.html#combining-chunks) for more details.
 
-```{Rcpp cerealization, ref.label = c('myclass_definition', 'myclass_test', 'myclass_serialization', 'myclass_deserialization'), cache = TRUE, include = FALSE}
+```{Rcpp cerealization, ref.label = c('myclass_definition', 'myclass_test', 'myclass_serialization', 'myclass_deserialization', 'cerealizations_source'), cache = TRUE, include = FALSE}
 ```
 
 ```{Rcpp myclass_definition, eval = FALSE}
@@ -532,32 +532,36 @@ Roughly, we're going to create a serializable NumericMatrix (more or less).
 #include <Rcpp.h>
 using namespace Rcpp;
 
-class MyClass
+class SerializableNumericMatrix
 {
 private:
-  int Data_rows;
-  int Data_cols;
-  std::vector<double> Data;
+  int nrows;
+  int ncols;
+  std::vector<double> data;
   friend class cereal::access;
   // This method lets cereal know which data members to serialize
   template<class Archive>
   void serialize(Archive& ar)
   {
-    ar( Data, Data_rows, Data_cols ); // serialize things by passing them to the archive
+    ar( data, nrows, ncols ); // serialize things by passing them to the archive
   }
 public:
-  MyClass(){};
-  MyClass(NumericMatrix x) {
+  SerializableNumericMatrix(){};
+  SerializableNumericMatrix(NumericMatrix x) {
     std::vector<double> y = as<std::vector<double>>(x); // Rcpp::as
-    Data = y;
-    Data_rows = x.nrow();
-    Data_cols = x.ncol();
+    data = y;
+    nrows = x.nrow();
+    ncols = x.ncol();
   };
-  NumericVector getNumericData() {
+  NumericVector neuemericMatrix() {
     // Thanks to Kevin Ushey for the tip to use dim attribute
     // http://stackoverflow.com/a/19866956/1091835
-    NumericVector d = wrap(Data);
-    d.attr("dim") = Dimension(Data_rows, Data_cols);
+    NumericVector d = wrap(data);
+    d.attr("dim") = Dimension(nrows, ncols);
+    return d;
+  }
+  NumericMatrix numericMatrix() {
+    NumericMatrix d(nrows, ncols, data.begin());
     return d;
   }
 };
@@ -567,27 +571,27 @@ Let's just test that everything works before adding [de-]serialization capabilit
 
 ```{Rcpp myclass_test, eval = FALSE}
 // [[Rcpp::export]]
-NumericVector testMC(NumericMatrix x) {
-  MyClass mc(x);
-  return mc.getNumericData();
+NumericMatrix testSNM(NumericMatrix x) {
+  SerializableNumericMatrix snm(x);
+  return snm.numericMatrix();
 }
 ```
 
 ```{r myclass_example, dependson = 'cerealization', cache = TRUE}
 x <- matrix(0:9, nrow = 2, ncol = 5)
-(y <- testMC(x))
+(y <- testSNM(x))
 ```
 
 Yay! Okay, for this we are going to use the serialization/deserialization example from [Rcereal README.md](https://github.com/wush978/Rcereal/blob/master/README.md).
 
 ```{Rcpp myclass_serialization, eval = FALSE}
 // [[Rcpp::export]]
-RawVector serializeMC(NumericMatrix x) {
-  MyClass mc(x);
+RawVector serializeSNM(NumericMatrix x) {
+  SerializableNumericMatrix snm(x);
   std::stringstream ss;
   {
     cereal::BinaryOutputArchive oarchive(ss); // Create an output archive
-    oarchive(mc);
+    oarchive(snm);
   }
   ss.seekg(0, ss.end);
   RawVector retval(ss.tellg());
@@ -599,42 +603,230 @@ RawVector serializeMC(NumericMatrix x) {
 
 ```{Rcpp myclass_deserialization, eval = FALSE}
 //[[Rcpp::export]]
-NumericVector deserializeMC(RawVector src) {
+NumericVector deserializeSNM(RawVector src) {
   std::stringstream ss;
   ss.write(reinterpret_cast<char*>(&src[0]), src.size());
   ss.seekg(0, ss.beg);
-  MyClass mc;
+  SerializableNumericMatrix snm;
   {
     cereal::BinaryInputArchive iarchive(ss);
-    iarchive(mc);
+    iarchive(snm);
   }
-  return mc.getNumericData();
+  return snm.numericMatrix();
 }
 ```
 
 ```{r cerealization_example, dependson = c('myclass_example', 'cerealization'), cache = TRUE}
-(raw_vector <- serializeMC(x))
-deserializeMC(raw_vector)
+(raw_vector <- serializeSNM(x))
+deserializeSNM(raw_vector)
 ```
 
-### Fast Classification Revisited
+### Armadillo Serialization (Not Working)
 
-```{Rcpp serialized_nbc, eval = FALSE}
+Basically, we want to be able to serialize Armadillo matrices because then we can serialize things like the Naive Bayes classifier that rely on `arma::Mat`'s.
+
+```{r}
+# Enables us to include files in src/
+registerPlugin("local", function() {
+  return(list(env = list(
+    PKG_CXXFLAGS = paste0('-I"', getwd(), '/src"')
+  )))
+})
+```
+
+```{Rcpp boosted_serialization, ref.label = c('bs_includes', 'bs_boost_serialization_includes', 'bs_RcppArmadilloForward', 'bs_armadillo_include', 'bs_boost_archive_includes', 'bs_mlpack_includes', 'bs_ns', 'bs_test_src', 'bs_serialize_src', 'bs_deserialize_src'), cache = TRUE, include = FALSE}
+```
+```{Rcpp bs_includes, eval = FALSE}
+// [[Rcpp::plugins(local)]]
 // [[Rcpp::plugins(mlpack11)]]
+// [[Rcpp::depends(BH)]]
 // [[Rcpp::depends(RcppArmadillo)]]
+```
 
+Include everything we'll need for `serialize()`:
+
+```{Rcpp bs_boost_serialization_includes, eval = FALSE}
+#include <boost/serialization/serialization.hpp>
+#include <boost/serialization/nvp.hpp>
+#include <boost/serialization/array.hpp>
+```
+
+In the next chunk we copy and modify the `RcppArmadillo__RcppArmadilloForward__h` definition from **RcppArmadilloForward.h** so as to use our own Mat extra proto and meat, which is really just:
+
+```cpp
+//! Add a serialization operator.
+template<typename Archive>
+void serialize(Archive& ar, const unsigned int version);
+
+#include <RcppArmadillo/Mat_proto.h>
+```
+
+The **Mat_extra_bones.hpp** is included for serialization and **Mat_proto.h** is included so RcppArmadillo plays nice.
+
+```{Rcpp bs_RcppArmadilloForward, eval = FALSE}
+#ifndef RcppArmadillo__RcppArmadilloForward__h
+#define RcppArmadillo__RcppArmadilloForward__h
+
+#include <RcppCommon.h>
+#include <Rconfig.h>
+#include <RcppArmadilloConfig.h>
+
+// Costom Mat extension that combines MLPACK with RcppArmadillo's Mat extensions:
+#define ARMA_EXTRA_MAT_PROTO mat_extra_bones.hpp
+#define ARMA_EXTRA_MAT_MEAT  mat_extra_meat.hpp
+
+// Everything else the same:
+#define ARMA_EXTRA_COL_PROTO RcppArmadillo/Col_proto.h
+#define ARMA_EXTRA_COL_MEAT  RcppArmadillo/Col_meat.h
+#define ARMA_EXTRA_ROW_PROTO RcppArmadillo/Row_proto.h
+#define ARMA_EXTRA_ROW_MEAT  RcppArmadillo/Row_meat.h
+#define ARMA_RNG_ALT         RcppArmadillo/Alt_R_RNG.h
+#include <armadillo>
+/* forward declarations */
+namespace Rcpp {
+    /* support for wrap */
+    template <typename T> SEXP wrap ( const arma::Mat<T>& ) ;
+    template <typename T> SEXP wrap ( const arma::Row<T>& ) ;
+    template <typename T> SEXP wrap ( const arma::Col<T>& ) ;
+    template <typename T> SEXP wrap ( const arma::field<T>& ) ;
+    template <typename T> SEXP wrap ( const arma::Cube<T>& ) ;
+    template <typename T> SEXP wrap ( const arma::subview<T>& ) ;
+    template <typename T> SEXP wrap ( const arma::SpMat<T>& ) ;
+    
+    template <typename T1, typename T2, typename glue_type> 
+    SEXP wrap(const arma::Glue<T1, T2, glue_type>& X ) ;
+    
+    template <typename T1, typename op_type>
+    SEXP wrap(const arma::Op<T1, op_type>& X ) ;
+    
+    template <typename T1, typename T2, typename glue_type> 
+    SEXP wrap(const arma::eGlue<T1, T2, glue_type>& X ) ;
+    
+    template <typename T1, typename op_type>
+    SEXP wrap(const arma::eOp<T1, op_type>& X ) ;
+    
+    template <typename T1, typename op_type>
+    SEXP wrap(const arma::OpCube<T1,op_type>& X ) ;
+    
+    template <typename T1, typename T2, typename glue_type>
+    SEXP wrap(const arma::GlueCube<T1,T2,glue_type>& X ) ;
+    
+    template <typename T1, typename op_type>
+    SEXP wrap(const arma::eOpCube<T1,op_type>& X ) ;
+    
+    template <typename T1, typename T2, typename glue_type>
+    SEXP wrap(const arma::eGlueCube<T1,T2,glue_type>& X ) ;
+
+    template<typename out_eT, typename T1, typename op_type>
+    SEXP wrap( const arma::mtOp<out_eT,T1,op_type>& X ) ;
+
+    template<typename out_eT, typename T1, typename T2, typename glue_type>
+    SEXP wrap( const arma::mtGlue<out_eT,T1,T2,glue_type>& X );
+    
+    template <typename eT, typename gen_type>
+    SEXP wrap( const arma::Gen<eT,gen_type>& X) ;
+    
+    template<typename eT, typename gen_type>
+    SEXP wrap( const arma::GenCube<eT,gen_type>& X) ;
+    
+    namespace traits {
+
+	/* support for as */
+	template <typename T> class Exporter< arma::Mat<T> > ;
+	template <typename T> class Exporter< arma::Row<T> > ;
+	template <typename T> class Exporter< arma::Col<T> > ;
+	template <typename T> class Exporter< arma::SpMat<T> > ;
+    
+	template <typename T> class Exporter< arma::field<T> > ;
+    // template <typename T> class Exporter< arma::Cube<T> > ;
+
+    } // namespace traits 
+
+    template <typename T> class ConstReferenceInputParameter< arma::Mat<T> > ;
+    template <typename T> class ReferenceInputParameter< arma::Mat<T> > ;
+    template <typename T> class ConstInputParameter< arma::Mat<T> > ;
+    
+    template <typename T> class ConstReferenceInputParameter< arma::Col<T> > ;
+    template <typename T> class ReferenceInputParameter< arma::Col<T> > ;
+    template <typename T> class ConstInputParameter< arma::Col<T> > ;
+    
+    template <typename T> class ConstReferenceInputParameter< arma::Row<T> > ;
+    template <typename T> class ReferenceInputParameter< arma::Row<T> > ;
+    template <typename T> class ConstInputParameter< arma::Row<T> > ;
+    
+}
+
+#endif
+```
+
+Okay, now that that's been defined, let's include **RcppArmadillo.h** which will include **RcppForward.h** but which will (hopefully) *not* redefine our slightly customized `RcppArmadillo__RcppArmadilloForward__h`.
+
+```{Rcpp bs_armadillo_include, eval = FALSE}
 #include <RcppArmadillo.h>
-using namespace Rcpp;
+```
 
+MLPACK's Naive Bayes Classifier:
+
+```{Rcpp bs_mlpack_includes, eval = FALSE}
 #include <mlpack/core/util/log.hpp>
 #include <mlpack/methods/naive_bayes/naive_bayes_classifier.hpp>
 using namespace mlpack::naive_bayes;
+```
 
+Boost's Archives:
+
+```{Rcpp bs_boost_archive_includes, eval = FALSE}
+// Include everything we'll need for archiving.
+#include <boost/archive/binary_oarchive.hpp>
+#include <boost/archive/binary_iarchive.hpp>
+#include <sstream>
+```
+```{Rcpp bs_ns, eval = FALSE}
+using namespace Rcpp;
+using namespace arma;
+```
+```{Rcpp bs_test_src, eval = FALSE}
 // [[Rcpp::export]]
-NumericVector serialize_mlpackNBC(const arma::mat& training_data, const arma::Row<size_t>& labels, const size_t& classes) {
-  // Initialization & training:
-  NaiveBayesClassifier<> nbc(training_data, labels, classes);
+mat test() {
+  mat A(3, 6, fill::randu);
+  return A;
 }
+```
+
+```{r bs_test_ex}
+set.seed(0); (x1 <- test())
+set.seed(0); x2 <- test()
+identical(x1, x2)
+```
+
+```{Rcpp bs_serialize_src, eval = FALSE}
+// [[Rcpp::export]]
+RawVector test_serialization(Mat<double> m) {
+  std::stringstream ss;
+  // save data to archive
+  {
+    boost::archive::binary_oarchive oarchive(ss); // create an output archive
+    oarchive & m; // write class instance to archive
+    // archive and stream closed when destructors are called
+  }
+  ss.seekg(0, ss.end);
+  RawVector retval(ss.tellg());
+  ss.seekg(0, ss.beg);
+  ss.read(reinterpret_cast<char*>(&retval[0]), retval.size());
+  return retval;
+}
+```
+
+```{r bs_serialize_ex}
+# (y1 <- test_serialization(x1))
+```
+
+```{Rcpp bs_deserialize_src, eval = FALSE}
+
+```
+
+```{r bs_deserialize_ex}
+
 ```
 
 # References

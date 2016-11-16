@@ -19,7 +19,7 @@ My main goal in this educational endeavor is to be able to use the [MLPACK](http
         -   [DLib](#dlib)
     -   [Random Number Generation](#random-number-generation)
     -   [Serialization](#serialization)
-        -   [Fast Classification Revisited](#fast-classification-revisited)
+        -   [Armadillo Serialization (Not Working)](#armadillo-serialization-not-working)
 -   [References](#references)
 
 Setup
@@ -151,9 +151,9 @@ microbenchmark(
 
 | expr   |     min|      lq|    mean|  median|      uq|     max|  neval|
 |:-------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| native |  0.0025|  0.0028|  0.0047|  0.0037|  0.0049|  0.0456|    100|
-| loop   |  0.8798|  0.9639|  1.2831|  1.0744|  1.5010|  2.7643|    100|
-| Rcpp   |  0.0044|  0.0060|  0.0105|  0.0100|  0.0122|  0.0331|    100|
+| native |  0.0025|  0.0032|  0.0049|  0.0043|  0.0057|  0.0182|    100|
+| loop   |  0.8891|  1.0334|  1.4934|  1.2278|  1.8407|  4.0855|    100|
+| Rcpp   |  0.0043|  0.0061|  0.0145|  0.0112|  0.0155|  0.1262|    100|
 
 Using Libraries
 ---------------
@@ -191,9 +191,9 @@ microbenchmark(
 
 | expr    |     min|      lq|    mean|  median|      uq|     max|  neval|
 |:--------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| lm      |  0.8476|  0.9612|  1.4189|  1.2675|  1.6239|  3.7993|    100|
-| fastLm  |  0.0940|  0.1118|  0.1667|  0.1507|  0.2092|  0.3982|    100|
-| RcppArm |  0.1186|  0.1448|  0.2131|  0.1753|  0.2316|  0.8633|    100|
+| lm      |  0.8488|  1.1605|  2.1720|  1.5225|  2.5655|  13.095|    100|
+| fastLm  |  0.0928|  0.1129|  0.2903|  0.1383|  0.2211|   4.413|    100|
+| RcppArm |  0.1213|  0.1671|  0.3172|  0.2150|  0.3276|   3.044|    100|
 
 ### Fast K-Means
 
@@ -260,10 +260,10 @@ microbenchmark(
 
 | expr               |     min|      lq|    mean|  median|      uq|     max|  neval|
 |:-------------------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| kmeans\_trees      |  0.1877|  0.2097|  0.2585|  0.2211|  0.2650|  1.2238|    100|
-| mlpackKM\_trees    |  0.0197|  0.0306|  0.0422|  0.0396|  0.0512|  0.0971|    100|
-| kmeans\_faithful   |  0.2026|  0.2283|  0.2842|  0.2433|  0.2745|  2.6580|    100|
-| mlpackKM\_faithful |  0.0840|  0.1261|  0.1489|  0.1377|  0.1495|  0.6221|    100|
+| kmeans\_trees      |  0.1904|  0.2035|  0.3100|  0.2233|  0.3602|  1.5158|    100|
+| mlpackKM\_trees    |  0.0215|  0.0314|  0.0545|  0.0389|  0.0570|  0.2402|    100|
+| kmeans\_faithful   |  0.1986|  0.2174|  0.3409|  0.2353|  0.3692|  2.3983|    100|
+| mlpackKM\_faithful |  0.0917|  0.1251|  0.1721|  0.1435|  0.1779|  0.5402|    100|
 
 Fast Classification
 -------------------
@@ -391,8 +391,8 @@ microbenchmark(
 
 | expr       |     min|      lq|    mean|  median|      uq|      max|  neval|
 |:-----------|-------:|-------:|-------:|-------:|-------:|--------:|------:|
-| naiveBayes |  4.4224|  4.8786|  5.9572|  5.2794|  6.9049|  12.0678|    100|
-| fastNBC    |  0.0152|  0.0177|  0.0346|  0.0381|  0.0425|   0.0911|    100|
+| naiveBayes |  4.6171|  5.4975|  7.5072|   6.904|  8.5516|  18.9154|    100|
+| fastNBC    |  0.0152|  0.0195|  0.0413|   0.041|  0.0472|   0.1733|    100|
 
 ### External Pointers
 
@@ -466,10 +466,10 @@ microbenchmark(
 ) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
 ```
 
-| expr              |     min|      lq|    mean|  median|      uq|     max|  neval|
-|:------------------|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| e1071 prediction  |  3.5328|  3.8484|  4.5833|  4.2302|  4.9111|  8.8710|    100|
-| MLPACK prediction |  0.0093|  0.0112|  0.0261|  0.0271|  0.0349|  0.0798|    100|
+| expr              |     min|      lq|   mean|  median|      uq|    max|  neval|
+|:------------------|-------:|-------:|------:|-------:|-------:|------:|------:|
+| e1071 prediction  |  3.5747|  4.0661|  4.924|  4.5684|  5.4075|  14.18|    100|
+| MLPACK prediction |  0.0091|  0.0108|  0.045|  0.0278|  0.0344|   2.08|    100|
 
 See [Exposing C++ functions and classes with Rcpp modules](http://dirk.eddelbuettel.com/code/rcpp/Rcpp-modules.pdf) for more information.
 
@@ -510,14 +510,14 @@ microbenchmark(
 
 | expr                |     min|      lq|    mean|  median|      uq|      max|  neval|
 |:--------------------|-------:|-------:|-------:|-------:|-------:|--------:|------:|
-| kmeans\_trees       |  0.1962|  0.2296|  0.3010|  0.2571|  0.3426|   0.6473|    100|
-| mlpackKM\_trees     |  0.0221|  0.0360|  0.0517|  0.0444|  0.0590|   0.1875|    100|
-| shark\_km\_trees    |  0.1020|  0.1293|  0.1756|  0.1473|  0.2036|   0.4582|    100|
-| sharkKM\_trees      |  0.0696|  0.0918|  0.1318|  0.1136|  0.1510|   0.5711|    100|
-| kmeans\_faithful    |  0.2009|  0.2406|  0.3303|  0.2769|  0.3950|   0.7896|    100|
-| mlpackKM\_faithful  |  0.0787|  0.1252|  0.1623|  0.1386|  0.1682|   0.4784|    100|
-| shark\_km\_faithful |  0.2908|  0.3333|  0.8599|  0.3668|  0.4674|  43.5087|    100|
-| sharkKM\_faithful   |  0.2546|  0.2886|  0.3652|  0.3196|  0.3922|   0.7748|    100|
+| kmeans\_trees       |  0.2019|  0.2302|  0.3185|  0.2561|  0.3615|   0.9179|    100|
+| mlpackKM\_trees     |  0.0181|  0.0389|  0.0560|  0.0488|  0.0647|   0.1740|    100|
+| shark\_km\_trees    |  0.1034|  0.1317|  0.1985|  0.1579|  0.2143|   0.7948|    100|
+| sharkKM\_trees      |  0.0691|  0.0914|  0.1311|  0.1077|  0.1425|   0.4000|    100|
+| kmeans\_faithful    |  0.2146|  0.2515|  0.3660|  0.2800|  0.3459|   1.8320|    100|
+| mlpackKM\_faithful  |  0.0799|  0.1241|  0.1704|  0.1435|  0.1904|   0.4892|    100|
+| shark\_km\_faithful |  0.2967|  0.3423|  0.9020|  0.3677|  0.4326|  47.8698|    100|
+| sharkKM\_faithful   |  0.2600|  0.3016|  0.3852|  0.3223|  0.3723|   0.9881|    100|
 
 #### Classification
 
@@ -629,8 +629,8 @@ microbenchmark(
 
 | expr |     min|      lq|    mean|  median|      uq|     max|  neval|
 |:-----|-------:|-------:|-------:|-------:|-------:|-------:|------:|
-| R    |  0.0484|  0.0497|  0.0586|  0.0503|  0.0616|  0.1250|    100|
-| Rcpp |  0.0288|  0.0299|  0.0384|  0.0306|  0.0447|  0.1335|    100|
+| R    |  0.0483|  0.0495|  0.0580|  0.0500|  0.0589|  0.2322|    100|
+| Rcpp |  0.0286|  0.0296|  0.0348|  0.0299|  0.0313|  0.0989|    100|
 
 Serialization
 -------------
@@ -639,7 +639,7 @@ Serialization
 
 This one requires: C++11 capability (if compiled supports it, enable via `// [[Rcpp::plugins(cpp11)]]`) and [cereal](http://uscilab.github.io/cereal/) serialization library, available via [Rcereal package](https://cran.r-project.org/package=Rcereal).
 
-Roughly, we're going to create a serializable NumericMatrix (more or less).
+Roughly, we're going to create a wrapper for NumericMatrix that is serializable. **Note**: unlike previous section where the Rcpp chunks were complete, this section has multiple Rcpp chunks that are stitched together using the "ref.label" knitr chunk parameter, allowing me to have notes in-between different functions that should be together. See [Combining Chunks](http://rmarkdown.rstudio.com/authoring_knitr_engines.html#combining-chunks) for more details.
 
 ``` cpp
 // [[Rcpp::plugins(cpp11)]]
@@ -663,32 +663,36 @@ Roughly, we're going to create a serializable NumericMatrix (more or less).
 #include <Rcpp.h>
 using namespace Rcpp;
 
-class MyClass
+class SerializableNumericMatrix
 {
 private:
-  int Data_rows;
-  int Data_cols;
-  std::vector<double> Data;
+  int nrows;
+  int ncols;
+  std::vector<double> data;
   friend class cereal::access;
   // This method lets cereal know which data members to serialize
   template<class Archive>
   void serialize(Archive& ar)
   {
-    ar( Data, Data_rows, Data_cols ); // serialize things by passing them to the archive
+    ar( data, nrows, ncols ); // serialize things by passing them to the archive
   }
 public:
-  MyClass(){};
-  MyClass(NumericMatrix x) {
+  SerializableNumericMatrix(){};
+  SerializableNumericMatrix(NumericMatrix x) {
     std::vector<double> y = as<std::vector<double>>(x); // Rcpp::as
-    Data = y;
-    Data_rows = x.nrow();
-    Data_cols = x.ncol();
+    data = y;
+    nrows = x.nrow();
+    ncols = x.ncol();
   };
-  NumericVector getNumericData() {
+  NumericVector neuemericMatrix() {
     // Thanks to Kevin Ushey for the tip to use dim attribute
     // http://stackoverflow.com/a/19866956/1091835
-    NumericVector d = wrap(Data);
-    d.attr("dim") = Dimension(Data_rows, Data_cols);
+    NumericVector d = wrap(data);
+    d.attr("dim") = Dimension(nrows, ncols);
+    return d;
+  }
+  NumericMatrix numericMatrix() {
+    NumericMatrix d(nrows, ncols, data.begin());
     return d;
   }
 };
@@ -698,15 +702,15 @@ Let's just test that everything works before adding \[de-\]serialization capabil
 
 ``` cpp
 // [[Rcpp::export]]
-NumericVector testMC(NumericMatrix x) {
-  MyClass mc(x);
-  return mc.getNumericData();
+NumericMatrix testSNM(NumericMatrix x) {
+  SerializableNumericMatrix snm(x);
+  return snm.numericMatrix();
 }
 ```
 
 ``` r
 x <- matrix(0:9, nrow = 2, ncol = 5)
-(y <- testMC(x))
+(y <- testSNM(x))
 ```
 
 |     |     |     |     |     |
@@ -718,12 +722,12 @@ Yay! Okay, for this we are going to use the serialization/deserialization exampl
 
 ``` cpp
 // [[Rcpp::export]]
-RawVector serializeMC(NumericMatrix x) {
-  MyClass mc(x);
+RawVector serializeSNM(NumericMatrix x) {
+  SerializableNumericMatrix snm(x);
   std::stringstream ss;
   {
     cereal::BinaryOutputArchive oarchive(ss); // Create an output archive
-    oarchive(mc);
+    oarchive(snm);
   }
   ss.seekg(0, ss.end);
   RawVector retval(ss.tellg());
@@ -735,21 +739,21 @@ RawVector serializeMC(NumericMatrix x) {
 
 ``` cpp
 //[[Rcpp::export]]
-NumericVector deserializeMC(RawVector src) {
+NumericVector deserializeSNM(RawVector src) {
   std::stringstream ss;
   ss.write(reinterpret_cast<char*>(&src[0]), src.size());
   ss.seekg(0, ss.beg);
-  MyClass mc;
+  SerializableNumericMatrix snm;
   {
     cereal::BinaryInputArchive iarchive(ss);
-    iarchive(mc);
+    iarchive(snm);
   }
-  return mc.getNumericData();
+  return snm.numericMatrix();
 }
 ```
 
 ``` r
-(raw_vector <- serializeMC(x))
+(raw_vector <- serializeSNM(x))
 ```
 
     ##  [1] 0a 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 f0
@@ -759,7 +763,7 @@ NumericVector deserializeMC(RawVector src) {
     ## [93] 05 00 00 00
 
 ``` r
-deserializeMC(raw_vector)
+deserializeSNM(raw_vector)
 ```
 
 |     |     |     |     |     |
@@ -767,24 +771,218 @@ deserializeMC(raw_vector)
 |    0|    2|    4|    6|    8|
 |    1|    3|    5|    7|    9|
 
-### Fast Classification Revisited
+### Armadillo Serialization (Not Working)
+
+Basically, we want to be able to serialize Armadillo matrices because then we can serialize things like the Naive Bayes classifier that rely on `arma::Mat`'s.
+
+``` r
+# Enables us to include files in src/
+registerPlugin("local", function() {
+  return(list(env = list(
+    PKG_CXXFLAGS = paste0('-I"', getwd(), '/src"')
+  )))
+})
+```
 
 ``` cpp
+// [[Rcpp::plugins(local)]]
 // [[Rcpp::plugins(mlpack11)]]
+// [[Rcpp::depends(BH)]]
 // [[Rcpp::depends(RcppArmadillo)]]
+```
 
+Include everything we'll need for `serialize()`:
+
+``` cpp
+#include <boost/serialization/serialization.hpp>
+#include <boost/serialization/nvp.hpp>
+#include <boost/serialization/array.hpp>
+```
+
+In the next chunk we copy and modify the `RcppArmadillo__RcppArmadilloForward__h` definition from **RcppArmadilloForward.h** so as to use our own Mat extra proto and meat, which is really just:
+
+``` cpp
+//! Add a serialization operator.
+template<typename Archive>
+void serialize(Archive& ar, const unsigned int version);
+
+#include <RcppArmadillo/Mat_proto.h>
+```
+
+The **Mat\_extra\_bones.hpp** is included for serialization and **Mat\_proto.h** is included so RcppArmadillo plays nice.
+
+``` cpp
+#ifndef RcppArmadillo__RcppArmadilloForward__h
+#define RcppArmadillo__RcppArmadilloForward__h
+
+#include <RcppCommon.h>
+#include <Rconfig.h>
+#include <RcppArmadilloConfig.h>
+
+// Costom Mat extension that combines MLPACK with RcppArmadillo's Mat extensions:
+#define ARMA_EXTRA_MAT_PROTO mat_extra_bones.hpp
+#define ARMA_EXTRA_MAT_MEAT  mat_extra_meat.hpp
+
+// Everything else the same:
+#define ARMA_EXTRA_COL_PROTO RcppArmadillo/Col_proto.h
+#define ARMA_EXTRA_COL_MEAT  RcppArmadillo/Col_meat.h
+#define ARMA_EXTRA_ROW_PROTO RcppArmadillo/Row_proto.h
+#define ARMA_EXTRA_ROW_MEAT  RcppArmadillo/Row_meat.h
+#define ARMA_RNG_ALT         RcppArmadillo/Alt_R_RNG.h
+#include <armadillo>
+/* forward declarations */
+namespace Rcpp {
+    /* support for wrap */
+    template <typename T> SEXP wrap ( const arma::Mat<T>& ) ;
+    template <typename T> SEXP wrap ( const arma::Row<T>& ) ;
+    template <typename T> SEXP wrap ( const arma::Col<T>& ) ;
+    template <typename T> SEXP wrap ( const arma::field<T>& ) ;
+    template <typename T> SEXP wrap ( const arma::Cube<T>& ) ;
+    template <typename T> SEXP wrap ( const arma::subview<T>& ) ;
+    template <typename T> SEXP wrap ( const arma::SpMat<T>& ) ;
+    
+    template <typename T1, typename T2, typename glue_type> 
+    SEXP wrap(const arma::Glue<T1, T2, glue_type>& X ) ;
+    
+    template <typename T1, typename op_type>
+    SEXP wrap(const arma::Op<T1, op_type>& X ) ;
+    
+    template <typename T1, typename T2, typename glue_type> 
+    SEXP wrap(const arma::eGlue<T1, T2, glue_type>& X ) ;
+    
+    template <typename T1, typename op_type>
+    SEXP wrap(const arma::eOp<T1, op_type>& X ) ;
+    
+    template <typename T1, typename op_type>
+    SEXP wrap(const arma::OpCube<T1,op_type>& X ) ;
+    
+    template <typename T1, typename T2, typename glue_type>
+    SEXP wrap(const arma::GlueCube<T1,T2,glue_type>& X ) ;
+    
+    template <typename T1, typename op_type>
+    SEXP wrap(const arma::eOpCube<T1,op_type>& X ) ;
+    
+    template <typename T1, typename T2, typename glue_type>
+    SEXP wrap(const arma::eGlueCube<T1,T2,glue_type>& X ) ;
+
+    template<typename out_eT, typename T1, typename op_type>
+    SEXP wrap( const arma::mtOp<out_eT,T1,op_type>& X ) ;
+
+    template<typename out_eT, typename T1, typename T2, typename glue_type>
+    SEXP wrap( const arma::mtGlue<out_eT,T1,T2,glue_type>& X );
+    
+    template <typename eT, typename gen_type>
+    SEXP wrap( const arma::Gen<eT,gen_type>& X) ;
+    
+    template<typename eT, typename gen_type>
+    SEXP wrap( const arma::GenCube<eT,gen_type>& X) ;
+    
+    namespace traits {
+
+    /* support for as */
+    template <typename T> class Exporter< arma::Mat<T> > ;
+    template <typename T> class Exporter< arma::Row<T> > ;
+    template <typename T> class Exporter< arma::Col<T> > ;
+    template <typename T> class Exporter< arma::SpMat<T> > ;
+    
+    template <typename T> class Exporter< arma::field<T> > ;
+    // template <typename T> class Exporter< arma::Cube<T> > ;
+
+    } // namespace traits 
+
+    template <typename T> class ConstReferenceInputParameter< arma::Mat<T> > ;
+    template <typename T> class ReferenceInputParameter< arma::Mat<T> > ;
+    template <typename T> class ConstInputParameter< arma::Mat<T> > ;
+    
+    template <typename T> class ConstReferenceInputParameter< arma::Col<T> > ;
+    template <typename T> class ReferenceInputParameter< arma::Col<T> > ;
+    template <typename T> class ConstInputParameter< arma::Col<T> > ;
+    
+    template <typename T> class ConstReferenceInputParameter< arma::Row<T> > ;
+    template <typename T> class ReferenceInputParameter< arma::Row<T> > ;
+    template <typename T> class ConstInputParameter< arma::Row<T> > ;
+    
+}
+
+#endif
+```
+
+Okay, now that that's been defined, let's include **RcppArmadillo.h** which will include **RcppForward.h** but which will (hopefully) *not* redefine our slightly customized `RcppArmadillo__RcppArmadilloForward__h`.
+
+``` cpp
 #include <RcppArmadillo.h>
-using namespace Rcpp;
+```
 
+MLPACK's Naive Bayes Classifier:
+
+``` cpp
 #include <mlpack/core/util/log.hpp>
 #include <mlpack/methods/naive_bayes/naive_bayes_classifier.hpp>
 using namespace mlpack::naive_bayes;
+```
 
+Boost's Archives:
+
+``` cpp
+// Include everything we'll need for archiving.
+#include <boost/archive/binary_oarchive.hpp>
+#include <boost/archive/binary_iarchive.hpp>
+#include <sstream>
+```
+
+``` cpp
+using namespace Rcpp;
+using namespace arma;
+```
+
+``` cpp
 // [[Rcpp::export]]
-NumericVector serialize_mlpackNBC(const arma::mat& training_data, const arma::Row<size_t>& labels, const size_t& classes) {
-  // Initialization & training:
-  NaiveBayesClassifier<> nbc(training_data, labels, classes);
+mat test() {
+  mat A(3, 6, fill::randu);
+  return A;
 }
+```
+
+``` r
+set.seed(0); (x1 <- test())
+```
+
+|        |        |        |        |        |        |
+|-------:|-------:|-------:|-------:|-------:|-------:|
+|  0.8967|  0.5729|  0.8984|  0.6291|  0.1766|  0.7698|
+|  0.2655|  0.9082|  0.9447|  0.0618|  0.6870|  0.4977|
+|  0.3721|  0.2017|  0.6608|  0.2060|  0.3841|  0.7176|
+
+``` r
+set.seed(0); x2 <- test()
+identical(x1, x2)
+```
+
+    ## [1] TRUE
+
+``` cpp
+// [[Rcpp::export]]
+RawVector test_serialization(Mat<double> m) {
+  std::stringstream ss;
+  // save data to archive
+  {
+    boost::archive::binary_oarchive oarchive(ss); // create an output archive
+    oarchive & m; // write class instance to archive
+    // archive and stream closed when destructors are called
+  }
+  ss.seekg(0, ss.end);
+  RawVector retval(ss.tellg());
+  ss.seekg(0, ss.beg);
+  ss.read(reinterpret_cast<char*>(&retval[0]), retval.size());
+  return retval;
+}
+```
+
+``` r
+# (y1 <- test_serialization(x1))
+```
+
+``` cpp
 ```
 
 References
