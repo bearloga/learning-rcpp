@@ -270,6 +270,8 @@ Fast Classification
 
 In this exercise, we will train a [Naive Bayes classifier from MLPACK](http://www.mlpack.org/docs/mlpack-2.1.0/doxygen.php?doc=classmlpack_1_1naive__bayes_1_1NaiveBayesClassifier.html). First, we train and classify in a single step. Then we will store the trained classifier in memory, and then later we will be able to save the model. Storing the trained model requires [serialization](https://en.wikipedia.org/wiki/Serialization), the topic of the next section.
 
+**Update (2017-09-05)**: there is now -- apparently -- a [RcppMLPACK2](https://github.com/rcppmlpack/rcppmlpack2). For more details, refer to [RcppMLPACK2 and the MLPACK Machine Learning Library article](http://gallery.rcpp.org/articles/using-rcppmlpack2/).
+
 ``` cpp
 // [[Rcpp::plugins(mlpack11)]]
 // [[Rcpp::depends(RcppArmadillo)]]
