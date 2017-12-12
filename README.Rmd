@@ -22,39 +22,19 @@ options(digits = 4)
 ## To install Homebrew:
 /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 ## Then:
-brew tap homebrew/versions && brew tap homebrew/science && brew update
+brew tap homebrew/science && brew update
 # brew install gcc --enable-cxx && brew link --overwrite gcc && brew link cmake
 brew install boost --c++11
 # Installing cmake may require: sudo chown -R `whoami` /usr/local/share/man/man7
-brew install mlpack shark dlib
+brew install mlpack
 ```
+
+May need to `brew reinstall --build-from-source mlpack` if you get "Reason: image not found" error about lack of Armadillo library. When I came back to these notes, Armadillo has been updated to v8 from v7 on my system and that was causing issues.
 
 ## Ubuntu/Debian
 
 ```bash
 sudo apt-get install libmlpack-dev libdlib-dev
-```
-
-### Building Shark library
-
-If `sudo apt-get install libshark-dev` is no go, we have to build the library ourselves. See [these installation instructions](http://image.diku.dk/shark/sphinx_pages/build/html/rest_sources/getting_started/installation.html) for more details.
-
-```bash
-# Install dependencies
-sudo apt-get install cmake cmake-curses-gui libatlas-base-dev wget
-
-# Download and unpack
-wget -O Shark-3.0.0.tar.gz https://github.com/Shark-ML/Shark/archive/v3.0.0.tar.gz
-tar -zxvf Shark-3.0.0.tar.gz
-mv Shark-3.0.0 Shark
-
-# Configure and build
-mkdir Shark/build/
-cd Shark/build
-# cmake "-DENABLE_OPENMP=OFF" "-DCMAKE_INSTALL_PREFIX=/usr/local/" ../
-cmake ../
-make
-make install
 ```
 
 ## R Packages
@@ -124,7 +104,7 @@ microbenchmark(
     output <- numeric(length(x))
     output[1] <- x[1]
     for (i in 2:length(x)) {
-      output[i] <- output[i-1] + x[i]
+      output[i] <- output[i - 1] + x[i]
     }
     return(output)
   })(x),
@@ -178,7 +158,7 @@ First, install the MLPACK library (see [&sect; Software Libraries](#software-lib
 registerPlugin("mlpack11", function() {
   return(list(env = list(
     USE_CXX1X = "yes",
-    CXX1XSTD="-std=c++11",
+    CXX1XSTD = "-std=c++11",
     PKG_LIBS = "-lmlpack"
   )))
 })
@@ -212,6 +192,15 @@ NumericVector mlpackKM(const arma::mat& data, const size_t& clusters) {
 ```
 
 (Alternatively: `sourceCpp("src/fastKm.cpp")` which creates `fastKm()` from [src/fastKm.cpp](src/fastKm.cpp))
+
+Getting:
+
+```
+Symbol not found: __ZN6mlpack3Log6AssertEbRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE
+Expected in: flat namespace
+```
+
+Which (via `c++filt __ZN6mlpack3Log6AssertEbRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE`) translates to: "mlpack::Log::Assert(bool, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)"
 
 ```{r kmeans_example, dependson = 'kmeans_source', cache = TRUE}
 data(trees, package = "datasets"); data(faithful, package = "datasets")
@@ -396,60 +385,6 @@ microbenchmark(
 ```
 
 See [Exposing C++ functions and classes with Rcpp modules](http://dirk.eddelbuettel.com/code/rcpp/Rcpp-modules.pdf) for more information.
-
-## Other Libraries
-
-### Shark
-
-For this one, I'm putting my work/notes into the [LearningRcppShark](LearningRcppShark/) package, which is how I'm learning the [Shark library](http://image.diku.dk/shark/), creating R bindings to it via RcppShark, and learning how to make an R package that makes use of an Rcpp-based library wrapper.
-
-```{r RcppShark}
-# devtools::install_github("bearloga/learning-rcpp/LearningRcppShark")
-library(LearningRcppShark)
-```
-
-```{r RcppShark_example, dependson = 'iris', cache = TRUE}
-fit <- shark_kmeans(training_x, 3)
-predictions <- predict(fit, testing_x)
-```
-
-```{r RcppShark_benchmark, dependson = 'kmeans_example', cache = TRUE}
-# This version does not check if x is a numeric matrix
-sharkKM <- function(x, k) {
-  return(LearningRcppShark:::SharkKMeansTrain(x, k))
-}
-
-microbenchmark(
-  kmeans_trees = kmeans(mtrees, 3),
-  mlpackKM_trees = mlpackKM(ttrees, 3),
-  shark_km_trees = shark_kmeans(mtrees, 3),
-  sharkKM_trees = sharkKM(mtrees, 3),
-  kmeans_faithful = kmeans(mfaithful, 2),
-  mlpackKM_faithful = mlpackKM(tfaithful, 2),
-  shark_km_faithful = shark_kmeans(mfaithful, 2),
-  sharkKM_faithful = sharkKM(mfaithful, 2)
-) %>% summary(unit = "ms") %>% knitr::kable(format = "markdown")
-```
-
-#### Classification
-
-### DLib
-
-```{r dlib, cache = FALSE, eval = FALSE}
-registerPlugin("dlib", function() {
-  return(list(env = list(
-    PKG_LIBS = "-ldlib"
-  )))
-})
-```
-
-```{Rcpp, eval = FALSE}
-// [[Rcpp::plugins(dlib)]]
-#include <Rcpp.h>
-using namespace Rcpp;
-```
-
-...
 
 ## Random Number Generation
 
@@ -817,18 +752,6 @@ RawVector test_serialization(Mat<double> m) {
   ss.read(reinterpret_cast<char*>(&retval[0]), retval.size());
   return retval;
 }
-```
-
-```{r bs_serialize_ex}
-# (y1 <- test_serialization(x1))
-```
-
-```{Rcpp bs_deserialize_src, eval = FALSE}
-
-```
-
-```{r bs_deserialize_ex}
-
 ```
 
 # References

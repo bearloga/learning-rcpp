@@ -2,20 +2,19 @@
 // [[Rcpp::depends(RcppArmadillo)]]
 
 #include <RcppArmadillo.h>
-using namespace Rcpp;
 #include <mlpack/core/util/log.hpp>
 #include <mlpack/methods/kmeans/kmeans.hpp>
-using namespace mlpack::kmeans;
-using namespace arma;
 
 // [[Rcpp::export]]
-NumericVector fastKm(const arma::mat& data, const size_t& clusters) {
-  Row<size_t> assignments;
-  NumericVector clust(data.n_cols);
-  KMeans<> k;
+Rcpp::NumericVector fastKm(const arma::mat& data, const size_t& clusters) {
+  arma::Row<size_t> assignments;
+  Rcpp::NumericVector clust(data.n_cols);
+  mlpack::kmeans::KMeans<> k;
+  mlpack::Log::Info << "Obtaining clusters..." << std::endl;
   k.Cluster(data, clusters, assignments);
+  // cluster assignments are 0-based
   for (int i = 0; i < assignments.n_cols; i++) {
-    clust[i] = assignments(i) + 1; // cluster assignments are 0-based
+    clust[i] = assignments(i) + 1;
   }
   return clust;
 }
